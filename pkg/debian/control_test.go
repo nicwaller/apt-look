@@ -3,6 +3,7 @@ package debian
 import (
 	"compress/gzip"
 	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -21,7 +22,7 @@ Description: A test package
  with additional details.`
 
 	parser := NewParser()
-	
+
 	var record Record
 	found := false
 	for r, err := range parser.ParseRecords(strings.NewReader(input)) {
@@ -30,20 +31,20 @@ Description: A test package
 		found = true
 		break
 	}
-	
+
 	require.True(t, found, "No records found")
 
 	// Test field access
 	assert.Equal(t, "test-package", record.Get("Package"))
 	assert.Equal(t, "1.0.0", record.Get("Version"))
 	assert.Equal(t, "amd64", record.Get("Architecture"))
-	
+
 	expectedDesc := "A test package\nThis is a multi-line description\nwith additional details."
 	assert.Equal(t, expectedDesc, record.Get("Description"))
-	
+
 	// Test case-insensitive access
 	assert.Equal(t, "test-package", record.Get("package"))
-	
+
 	// Test field ordering preservation
 	fields := record.Fields()
 	expectedOrder := []string{"Package", "Version", "Architecture", "Description"}
@@ -78,7 +79,7 @@ Description: A test package
  Multi-line description`
 
 	parser := NewParser()
-	
+
 	var originalRecord Record
 	found := false
 	for r, err := range parser.ParseRecords(strings.NewReader(input)) {
@@ -88,25 +89,25 @@ Description: A test package
 		break
 	}
 	require.True(t, found)
-	
+
 	// Convert to JSON and back
 	jsonData, err := json.Marshal(originalRecord)
 	require.NoError(t, err)
-	
+
 	var roundTripRecord Record
 	require.NoError(t, json.Unmarshal(jsonData, &roundTripRecord))
-	
+
 	// Verify perfect data integrity
 	assert.Len(t, roundTripRecord, len(originalRecord))
-	
+
 	for i, originalField := range originalRecord {
 		require.Less(t, i, len(roundTripRecord), "Missing field after round-trip: %s", originalField.Name)
-		
+
 		roundTripField := roundTripRecord[i]
 		assert.Equal(t, originalField.Name, roundTripField.Name)
 		assert.Equal(t, originalField.Value, roundTripField.Value)
 	}
-	
+
 	t.Logf("JSON output: %s", string(jsonData))
 }
 
@@ -120,7 +121,7 @@ Description: A test package
 `
 
 	parser := NewParser()
-	
+
 	var record Record
 	found := false
 	for r, err := range parser.ParseRecords(strings.NewReader(input)) {
@@ -130,7 +131,7 @@ Description: A test package
 		break
 	}
 	require.True(t, found)
-	
+
 	// Convert back to control format and verify byte-for-byte identical
 	output := record.String()
 	assert.Equal(t, input, output, "Round-trip conversion not identical")
@@ -183,7 +184,7 @@ Package: package3
 Version: 3.0.0`
 
 	parser := NewParser()
-	
+
 	// Test early termination
 	count := 0
 	for record, err := range parser.ParseRecords(strings.NewReader(input)) {
@@ -194,7 +195,7 @@ Version: 3.0.0`
 		}
 		assert.True(t, record.Has("Package"))
 	}
-	
+
 	assert.Equal(t, 2, count)
 }
 
@@ -203,7 +204,7 @@ func TestAccessorMethods(t *testing.T) {
 Version: 1.0.0`
 
 	parser := NewParser()
-	
+
 	var record Record
 	for r, err := range parser.ParseRecords(strings.NewReader(input)) {
 		require.NoError(t, err)
@@ -215,29 +216,51 @@ Version: 1.0.0`
 	value, exists := record.Lookup("Package")
 	assert.True(t, exists)
 	assert.Equal(t, "test-package", value)
-	
+
 	value, exists = record.Lookup("NonExistent")
 	assert.False(t, exists)
 	assert.Empty(t, value)
-	
+
 	// Test case-insensitive lookup
 	value, exists = record.Lookup("package")
 	assert.True(t, exists)
 	assert.Equal(t, "test-package", value)
-	
+
 	// Test Has method
 	assert.True(t, record.Has("Package"))
 	assert.True(t, record.Has("version")) // case-insensitive
 	assert.False(t, record.Has("NonExistent"))
-	
+
 	// Test Get method
 	assert.Equal(t, "test-package", record.Get("Package"))
 	assert.Equal(t, "1.0.0", record.Get("version")) // case-insensitive
 	assert.Empty(t, record.Get("NonExistent"))
-	
+
 	// Test Fields method
 	fields := record.Fields()
 	assert.Equal(t, []string{"Package", "Version"}, fields)
+}
+
+func TestFieldStringMethods(t *testing.T) {
+	field := Field{Name: "Package", Value: "test-package"}
+
+	// Test String() method (used by %v)
+	expectedString := "Package: test-package"
+	assert.Equal(t, expectedString, field.String())
+	assert.Equal(t, expectedString, fmt.Sprintf("%v", field))
+
+	// Test GoString() method (used by %#v)
+	expectedGoString := `debian.Field{Name: "Package", Value: "test-package"}`
+	assert.Equal(t, expectedGoString, field.GoString())
+	assert.Equal(t, expectedGoString, fmt.Sprintf("%#v", field))
+
+	// Test with multi-line value
+	multilineField := Field{Name: "Description", Value: "First line\nSecond line"}
+	expectedMultilineString := "Description: First line\nSecond line"
+	expectedMultilineGoString := `debian.Field{Name: "Description", Value: "First line\nSecond line"}`
+
+	assert.Equal(t, expectedMultilineString, multilineField.String())
+	assert.Equal(t, expectedMultilineGoString, multilineField.GoString())
 }
 
 func TestRepositoryFixtures(t *testing.T) {
@@ -339,9 +362,9 @@ func TestAllTestdataFiles(t *testing.T) {
 			for record, err := range parser.ParseRecords(gz) {
 				require.NoError(t, err, "Failed to parse record %d in %s", recordCount+1, fileName)
 				require.NotEmpty(t, record, "Empty record %d in %s", recordCount+1, fileName)
-				
+
 				recordCount++
-				
+
 				// Track what kind of file this appears to be
 				if record.Has("Package") {
 					hasPackageField = true
@@ -349,10 +372,10 @@ func TestAllTestdataFiles(t *testing.T) {
 				if record.Has("Origin") || record.Has("Suite") || record.Has("Codename") {
 					hasReleaseFields = true
 				}
-				
+
 				// Verify each record has at least one field
 				assert.True(t, len(record) > 0, "Record %d in %s has no fields", recordCount, fileName)
-				
+
 				// Verify all field names are non-empty
 				for _, field := range record {
 					assert.NotEmpty(t, field.Name, "Empty field name in record %d of %s", recordCount, fileName)
@@ -360,7 +383,7 @@ func TestAllTestdataFiles(t *testing.T) {
 			}
 
 			require.Greater(t, recordCount, 0, "No records found in %s", fileName)
-			
+
 			// Categorize and log the file type
 			if strings.Contains(fileName, "release") {
 				assert.True(t, hasReleaseFields, "%s appears to be a release file but lacks release fields", fileName)
@@ -373,6 +396,6 @@ func TestAllTestdataFiles(t *testing.T) {
 			}
 		})
 	}
-	
+
 	t.Logf("Successfully tested %d testdata files", len(files))
 }

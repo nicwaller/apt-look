@@ -15,6 +15,14 @@ type Field struct {
 	Value string `json:"value"`
 }
 
+func (f Field) String() string {
+	return fmt.Sprintf("%s: %s", f.Name, f.Value)
+}
+
+func (f Field) GoString() string {
+	return fmt.Sprintf("debian.Field{Name: %q, Value: %q}", f.Name, f.Value)
+}
+
 // Record represents a single record (paragraph) in a Debian control format file
 // Fields are stored in a slice to preserve the original ordering for round-trip conversion
 type Record []Field
@@ -107,12 +115,12 @@ func (p *Parser) parseRecords(r io.Reader, yield func(Record, error) bool) error
 		if err := p.validateFieldName(fieldName); err != nil {
 			return fmt.Errorf("invalid field name %q: %w", fieldName, err)
 		}
-		
+
 		// Check for duplicate field in current record
 		if currentRecord.Has(fieldName) {
 			return fmt.Errorf("duplicate field %q in record", fieldName)
 		}
-		
+
 		currentField = fieldName
 		value := strings.TrimLeft(parts[1], " \t")
 		currentValue.WriteString(value)
@@ -128,25 +136,24 @@ func (p *Parser) parseRecords(r io.Reader, yield func(Record, error) bool) error
 	return nil
 }
 
-
 // validateFieldName checks if a field name is valid according to Debian policy
 func (p *Parser) validateFieldName(name string) error {
 	// Field names must not be empty
 	if name == "" {
 		return fmt.Errorf("field name cannot be empty")
 	}
-	
+
 	// Field names must not start with '#' or '-'
 	if strings.HasPrefix(name, "#") || strings.HasPrefix(name, "-") {
 		return fmt.Errorf("field name cannot start with '#' or '-'")
 	}
-	
+
 	// Field names must use only US-ASCII characters, excluding control characters, spaces, and colons
 	validFieldName := regexp.MustCompile(`^[!-9;-~]+$`) // ASCII printable chars except space (0x20) and colon (0x3A)
 	if !validFieldName.MatchString(name) {
 		return fmt.Errorf("field name contains invalid characters (must be US-ASCII excluding control chars, spaces, and colons)")
 	}
-	
+
 	return nil
 }
 
@@ -159,14 +166,14 @@ func (r Record) Lookup(field string) (string, bool) {
 			return f.Value, true
 		}
 	}
-	
+
 	// Try case-insensitive match
 	for _, f := range r {
 		if strings.EqualFold(f.Name, field) {
 			return f.Value, true
 		}
 	}
-	
+
 	return "", false
 }
 
@@ -197,17 +204,17 @@ func (r Record) String() string {
 	if len(r) == 0 {
 		return ""
 	}
-	
+
 	var sb strings.Builder
 	for _, field := range r {
 		sb.WriteString(field.Name)
 		sb.WriteString(": ")
-		
+
 		// Handle multi-line values
 		lines := strings.Split(field.Value, "\n")
 		sb.WriteString(lines[0])
 		sb.WriteString("\n")
-		
+
 		// Add continuation lines with proper indentation
 		for _, line := range lines[1:] {
 			sb.WriteString(" ")
@@ -215,6 +222,6 @@ func (r Record) String() string {
 			sb.WriteString("\n")
 		}
 	}
-	
+
 	return sb.String()
 }
