@@ -9,8 +9,8 @@ func NewFileTransport() *FileTransport {
 	return &FileTransport{}
 }
 
-func (t *FileTransport) Scheme() string {
-	return "file"
+func (t *FileTransport) Schemes() []string {
+	return []string{"file"}
 }
 
 func (t *FileTransport) Acquire(ctx context.Context, req *AcquireRequest) (*AcquireResponse, error) {

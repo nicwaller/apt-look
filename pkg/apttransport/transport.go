@@ -80,3 +80,11 @@ func (e *AcquireError) Error() string {
 func (e *AcquireError) Unwrap() error {
 	return e.Err
 }
+
+type UnsupportedSchemeError struct {
+	Scheme string
+}
+
+func (e *UnsupportedSchemeError) Error() string {
+	return "unsupported scheme: " + e.Scheme
+}
