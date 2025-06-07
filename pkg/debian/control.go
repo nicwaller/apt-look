@@ -8,12 +8,6 @@ import (
 	"strings"
 )
 
-// Field represents a single field in a Debian control format file
-type Field struct {
-	Name  string
-	Value string
-}
-
 // Record represents a single record (paragraph) in a Debian control format file
 type Record map[string]string
 

@@ -145,40 +145,81 @@ func TestParseSpotifyPackages(t *testing.T) {
 
 func TestMultipleRepositoryFixtures(t *testing.T) {
 	fixtures := []struct {
-		name         string
-		releaseFile  string
-		packagesFile string
+		name           string
+		releaseFile    string
+		packagesFile   string
 		expectedOrigin string
+		expectedPackageCount int
 	}{
 		{
-			name:         "PostgreSQL",
-			releaseFile:  "postgresql-release.gz",
-			packagesFile: "postgresql-packages.gz",
-			expectedOrigin: "apt.postgresql.org",
+			name:           "Brave",
+			releaseFile:    "brave-release.gz",
+			packagesFile:   "brave-packages.gz",
+			expectedOrigin: "Brave Software",
+			expectedPackageCount: 124,
 		},
 		{
-			name:         "HashiCorp",
-			releaseFile:  "hashicorp-release.gz",
-			packagesFile: "hashicorp-packages.gz",
-			expectedOrigin: "Artifactory",
+			name:           "Chrome",
+			releaseFile:    "chrome-release.gz",
+			packagesFile:   "chrome-packages.gz",
+			expectedOrigin: "Google LLC",
+			expectedPackageCount: 4,
 		},
 		{
-			name:         "Docker",
-			releaseFile:  "docker-release.gz",
-			packagesFile: "docker-packages.gz",
+			name:           "Docker",
+			releaseFile:    "docker-release.gz",
+			packagesFile:   "docker-packages.gz",
 			expectedOrigin: "Docker",
+			expectedPackageCount: 306,
 		},
 		{
-			name:         "Microsoft",
-			releaseFile:  "microsoft-release.gz",
-			packagesFile: "microsoft-packages.gz",
-			expectedOrigin: "microsoft-ubuntu-jammy-prod jammy",
+			name:           "HashiCorp",
+			releaseFile:    "hashicorp-release.gz",
+			packagesFile:   "hashicorp-packages.gz",
+			expectedOrigin: "Artifactory",
+			expectedPackageCount: 2574,
 		},
 		{
-			name:         "Kubernetes",
-			releaseFile:  "kubernetes-release.gz",
-			packagesFile: "kubernetes-packages.gz",
+			name:           "Kubernetes",
+			releaseFile:    "kubernetes-release.gz",
+			packagesFile:   "kubernetes-packages.gz",
 			expectedOrigin: "obs://build.opensuse.org/isv:kubernetes:core:stable:v1.28/deb",
+			expectedPackageCount: 199,
+		},
+		{
+			name:           "Microsoft",
+			releaseFile:    "microsoft-release.gz",
+			packagesFile:   "microsoft-packages.gz",
+			expectedOrigin: "microsoft-ubuntu-jammy-prod jammy",
+			expectedPackageCount: 1744,
+		},
+		{
+			name:           "NodeSource",
+			releaseFile:    "nodesource-release.gz",
+			packagesFile:   "nodesource-packages.gz",
+			expectedOrigin: "",
+			expectedPackageCount: 1,
+		},
+		{
+			name:           "PostgreSQL",
+			releaseFile:    "postgresql-release.gz",
+			packagesFile:   "postgresql-packages.gz",
+			expectedOrigin: "apt.postgresql.org",
+			expectedPackageCount: 2201,
+		},
+		{
+			name:           "Signal",
+			releaseFile:    "signal-release.gz",
+			packagesFile:   "signal-packages.gz",
+			expectedOrigin: ". xenial",
+			expectedPackageCount: 467,
+		},
+		{
+			name:           "Spotify",
+			releaseFile:    "spotify-release.gz",
+			packagesFile:   "spotify-packages.gz",
+			expectedOrigin: "Spotify LTD",
+			expectedPackageCount: 4,
 		},
 	}
 
@@ -227,9 +268,9 @@ func TestMultipleRepositoryFixtures(t *testing.T) {
 				t.Fatalf("Failed to parse %s: %v", fixture.packagesFile, err)
 			}
 
-			if len(packages) == 0 {
-				t.Errorf("%s: Expected at least one package", fixture.name)
-				return
+			// Verify expected package count
+			if len(packages) != fixture.expectedPackageCount {
+				t.Errorf("%s: expected %d packages, got %d", fixture.name, fixture.expectedPackageCount, len(packages))
 			}
 
 			// Verify all packages have required fields
