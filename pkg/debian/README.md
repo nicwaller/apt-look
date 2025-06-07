@@ -21,9 +21,9 @@ A Go package for parsing Debian control format files, including APT repository R
 ### Methods
 
 - **`NewParser()`**: Create a new parser instance
-- **`ParseRecord(r io.Reader)`**: Parse a single record
-- **`ParseRecords(r io.Reader)`**: Parse multiple records
-- **`Record.Get(field string)`**: Get field value (case-insensitive)
+- **`ParseRecords(r io.Reader)`**: Returns an iterator over records (memory-efficient)
+- **`Record.Lookup(field string) (string, bool)`**: Get field value and existence check (case-insensitive)
+- **`Record.Get(field string)`**: Get field value (case-insensitive, returns empty string if not found)
 - **`Record.Has(field string)`**: Check if field exists (case-insensitive)
 - **`Record.Fields()`**: List all field names
 

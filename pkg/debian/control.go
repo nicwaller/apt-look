@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"iter"
 	"regexp"
 	"strings"
 )
@@ -19,22 +20,18 @@ func NewParser() *Parser {
 	return &Parser{}
 }
 
-// ParseRecord parses a single record from a Debian control format file
-func (p *Parser) ParseRecord(r io.Reader) (Record, error) {
-	records, err := p.ParseRecords(r)
-	if err != nil {
-		return nil, err
+// ParseRecords returns an iterator over records from a Debian control format file
+func (p *Parser) ParseRecords(r io.Reader) iter.Seq2[Record, error] {
+	return func(yield func(Record, error) bool) {
+		if err := p.parseRecords(r, yield); err != nil {
+			yield(nil, err)
+		}
 	}
-	if len(records) == 0 {
-		return nil, io.EOF
-	}
-	return records[0], nil
 }
 
-// ParseRecords parses multiple records from a Debian control format file
-func (p *Parser) ParseRecords(r io.Reader) ([]Record, error) {
+// parseRecords contains the actual parsing logic
+func (p *Parser) parseRecords(r io.Reader, yield func(Record, error) bool) error {
 	scanner := bufio.NewScanner(r)
-	var records []Record
 	currentRecord := make(Record)
 	var currentField string
 	var currentValue strings.Builder
@@ -48,12 +45,15 @@ func (p *Parser) ParseRecords(r io.Reader) ([]Record, error) {
 		}
 	}
 
-	flushCurrentRecord := func() {
+	flushCurrentRecord := func() bool {
 		flushCurrentField()
 		if len(currentRecord) > 0 {
-			records = append(records, currentRecord)
+			if !yield(currentRecord, nil) {
+				return false // Stop iteration if yield returns false
+			}
 			currentRecord = make(Record)
 		}
+		return true
 	}
 
 	for scanner.Scan() {
@@ -66,14 +66,16 @@ func (p *Parser) ParseRecords(r io.Reader) ([]Record, error) {
 
 		// Empty line indicates end of record
 		if strings.TrimSpace(line) == "" {
-			flushCurrentRecord()
+			if !flushCurrentRecord() {
+				return nil // Stop iteration if yield returned false
+			}
 			continue
 		}
 
 		// Continuation line (starts with space or tab)
 		if len(line) > 0 && (line[0] == ' ' || line[0] == '\t') {
 			if currentField == "" {
-				return nil, fmt.Errorf("continuation line without field: %q", line)
+				return fmt.Errorf("continuation line without field: %q", line)
 			}
 			// Remove leading whitespace and add to current value
 			currentValue.WriteString("\n")
@@ -84,7 +86,7 @@ func (p *Parser) ParseRecords(r io.Reader) ([]Record, error) {
 		// New field line
 		parts := strings.SplitN(line, ":", 2)
 		if len(parts) != 2 {
-			return nil, fmt.Errorf("invalid field line: %q", line)
+			return fmt.Errorf("invalid field line: %q", line)
 		}
 
 		// Flush previous field
@@ -93,13 +95,13 @@ func (p *Parser) ParseRecords(r io.Reader) ([]Record, error) {
 		// Validate and normalize field name
 		fieldName := strings.TrimSpace(parts[0])
 		if err := p.validateFieldName(fieldName); err != nil {
-			return nil, fmt.Errorf("invalid field name %q: %w", fieldName, err)
+			return fmt.Errorf("invalid field name %q: %w", fieldName, err)
 		}
 		normalizedField := p.normalizeFieldName(fieldName)
 		
 		// Check for duplicate field in current record
 		if currentRecord.Has(normalizedField) {
-			return nil, fmt.Errorf("duplicate field %q in record", normalizedField)
+			return fmt.Errorf("duplicate field %q in record", normalizedField)
 		}
 		
 		currentField = normalizedField
@@ -111,10 +113,10 @@ func (p *Parser) ParseRecords(r io.Reader) ([]Record, error) {
 	flushCurrentRecord()
 
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("scanner error: %w", err)
+		return fmt.Errorf("scanner error: %w", err)
 	}
 
-	return records, nil
+	return nil
 }
 
 // normalizeFieldName converts field names to standard case for consistent storage
@@ -189,38 +191,35 @@ func (p *Parser) validateFieldName(name string) error {
 	return nil
 }
 
-// Get retrieves a field value from a record (case-insensitive)
-func (r Record) Get(field string) string {
+// Lookup retrieves a field value from a record (case-insensitive)
+// Returns the value and whether the field was found, following Go map idiom
+func (r Record) Lookup(field string) (string, bool) {
 	// Try exact match first
 	if value, exists := r[field]; exists {
-		return value
+		return value, true
 	}
 	
 	// Try case-insensitive match
 	for k, v := range r {
 		if strings.EqualFold(k, field) {
-			return v
+			return v, true
 		}
 	}
 	
-	return ""
+	return "", false
+}
+
+// Get retrieves a field value from a record (case-insensitive)
+// Returns empty string if field doesn't exist
+func (r Record) Get(field string) string {
+	value, _ := r.Lookup(field)
+	return value
 }
 
 // Has checks if a field exists in a record (case-insensitive)
 func (r Record) Has(field string) bool {
-	// Try exact match first
-	if _, exists := r[field]; exists {
-		return true
-	}
-	
-	// Try case-insensitive match
-	for k := range r {
-		if strings.EqualFold(k, field) {
-			return true
-		}
-	}
-	
-	return false
+	_, exists := r.Lookup(field)
+	return exists
 }
 
 // Fields returns all field names in the record

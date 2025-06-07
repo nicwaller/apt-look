@@ -16,9 +16,20 @@ Description: A test package
  with additional details.`
 
 	parser := NewParser()
-	record, err := parser.ParseRecord(strings.NewReader(input))
-	if err != nil {
-		t.Fatalf("ParseRecord failed: %v", err)
+	
+	var record Record
+	found := false
+	for r, err := range parser.ParseRecords(strings.NewReader(input)) {
+		if err != nil {
+			t.Fatalf("ParseRecords failed: %v", err)
+		}
+		record = r
+		found = true
+		break // Get first record
+	}
+	
+	if !found {
+		t.Fatal("No records found")
 	}
 
 	expected := map[string]string{
@@ -48,9 +59,12 @@ Version: 2.0.0
 Architecture: amd64`
 
 	parser := NewParser()
-	records, err := parser.ParseRecords(strings.NewReader(input))
-	if err != nil {
-		t.Fatalf("ParseRecords failed: %v", err)
+	var records []Record
+	for record, err := range parser.ParseRecords(strings.NewReader(input)) {
+		if err != nil {
+			t.Fatalf("ParseRecords failed: %v", err)
+		}
+		records = append(records, record)
 	}
 
 	if len(records) != 2 {
@@ -80,9 +94,20 @@ func TestParseSpotifyRelease(t *testing.T) {
 	defer gz.Close()
 
 	parser := NewParser()
-	record, err := parser.ParseRecord(gz)
-	if err != nil {
-		t.Fatalf("ParseRecord failed: %v", err)
+	
+	var record Record
+	found := false
+	for r, err := range parser.ParseRecords(gz) {
+		if err != nil {
+			t.Fatalf("ParseRecords failed: %v", err)
+		}
+		record = r
+		found = true
+		break // Get first record
+	}
+	
+	if !found {
+		t.Fatal("No records found")
 	}
 
 	// Check that we have the expected fields
@@ -117,9 +142,12 @@ func TestParseSpotifyPackages(t *testing.T) {
 	defer gz.Close()
 
 	parser := NewParser()
-	records, err := parser.ParseRecords(gz)
-	if err != nil {
-		t.Fatalf("ParseRecords failed: %v", err)
+	var records []Record
+	for record, err := range parser.ParseRecords(gz) {
+		if err != nil {
+			t.Fatalf("ParseRecords failed: %v", err)
+		}
+		records = append(records, record)
 	}
 
 	if len(records) == 0 {
@@ -240,9 +268,19 @@ func TestMultipleRepositoryFixtures(t *testing.T) {
 			}
 			defer gz.Close()
 
-			release, err := parser.ParseRecord(gz)
-			if err != nil {
-				t.Fatalf("Failed to parse %s: %v", fixture.releaseFile, err)
+			var release Record
+			found := false
+			for r, err := range parser.ParseRecords(gz) {
+				if err != nil {
+					t.Fatalf("Failed to parse %s: %v", fixture.releaseFile, err)
+				}
+				release = r
+				found = true
+				break // Get first record
+			}
+			
+			if !found {
+				t.Fatalf("No release record found in %s", fixture.releaseFile)
 			}
 
 			// Check Origin field
@@ -263,9 +301,12 @@ func TestMultipleRepositoryFixtures(t *testing.T) {
 			}
 			defer pgz.Close()
 
-			packages, err := parser.ParseRecords(pgz)
-			if err != nil {
-				t.Fatalf("Failed to parse %s: %v", fixture.packagesFile, err)
+			var packages []Record
+			for record, err := range parser.ParseRecords(pgz) {
+				if err != nil {
+					t.Fatalf("Failed to parse %s: %v", fixture.packagesFile, err)
+				}
+				packages = append(packages, record)
 			}
 
 			// Verify expected package count
@@ -292,9 +333,11 @@ func TestInvalidFieldLine(t *testing.T) {
 	input := `This is not a valid field line`
 
 	parser := NewParser()
-	_, err := parser.ParseRecord(strings.NewReader(input))
-	if err == nil {
-		t.Error("Expected error for invalid field line")
+	for _, err := range parser.ParseRecords(strings.NewReader(input)) {
+		if err == nil {
+			t.Error("Expected error for invalid field line")
+		}
+		break // Just check first result
 	}
 }
 
@@ -302,9 +345,11 @@ func TestContinuationWithoutField(t *testing.T) {
 	input := ` This is a continuation line without a field`
 
 	parser := NewParser()
-	_, err := parser.ParseRecord(strings.NewReader(input))
-	if err == nil {
-		t.Error("Expected error for continuation line without field")
+	for _, err := range parser.ParseRecords(strings.NewReader(input)) {
+		if err == nil {
+			t.Error("Expected error for continuation line without field")
+		}
+		break // Just check first result
 	}
 }
 
@@ -323,9 +368,11 @@ func TestInvalidFieldNames(t *testing.T) {
 	parser := NewParser()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := parser.ParseRecord(strings.NewReader(tt.input))
-			if err == nil {
-				t.Errorf("Expected error for invalid field name: %s", tt.input)
+			for _, err := range parser.ParseRecords(strings.NewReader(tt.input)) {
+				if err == nil {
+					t.Errorf("Expected error for invalid field name: %s", tt.input)
+				}
+				break // Just check first result
 			}
 		})
 	}
@@ -337,11 +384,45 @@ Version: 1.0.0
 Package: duplicate-package`
 
 	parser := NewParser()
-	_, err := parser.ParseRecord(strings.NewReader(input))
-	if err == nil {
-		t.Error("Expected error for duplicate field")
+	for _, err := range parser.ParseRecords(strings.NewReader(input)) {
+		if err == nil {
+			t.Error("Expected error for duplicate field")
+		}
+		if !strings.Contains(err.Error(), "duplicate field") {
+			t.Errorf("Error should mention duplicate field, got: %v", err)
+		}
+		break // Just check first result
 	}
-	if !strings.Contains(err.Error(), "duplicate field") {
-		t.Errorf("Error should mention duplicate field, got: %v", err)
+}
+
+func TestIteratorInterface(t *testing.T) {
+	input := `Package: package1
+Version: 1.0.0
+
+Package: package2
+Version: 2.0.0
+
+Package: package3
+Version: 3.0.0`
+
+	parser := NewParser()
+	
+	// Test that we can iterate and stop early
+	count := 0
+	for record, err := range parser.ParseRecords(strings.NewReader(input)) {
+		if err != nil {
+			t.Fatalf("Iterator failed: %v", err)
+		}
+		count++
+		if count == 2 {
+			break // Stop after 2 records
+		}
+		if !record.Has("Package") {
+			t.Errorf("Record %d missing Package field", count)
+		}
+	}
+	
+	if count != 2 {
+		t.Errorf("Expected to process 2 records, got %d", count)
 	}
 }
