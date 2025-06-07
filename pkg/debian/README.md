@@ -10,12 +10,15 @@ A Go package for parsing Debian control format files, including APT repository R
 - **Duplicate detection**: Prevents duplicate fields within the same record
 - **Case-insensitive access**: Retrieve fields regardless of case
 - **Multi-line support**: Handles continuation lines and folded fields
+- **Field ordering preservation**: Maintains original field order for byte-for-byte round-trip conversion
+- **Perfect round-trip integrity**: Control format → JSON → Control format with identical output
 
 ## API
 
 ### Types
 
-- **`Record`**: A map representing a single control file record (paragraph)
+- **`Field`**: A single field with Name and Value
+- **`Record`**: A slice of Fields representing a single control file record (paragraph), preserving field order
 - **`Parser`**: The main parser type
 
 ### Methods
@@ -25,7 +28,8 @@ A Go package for parsing Debian control format files, including APT repository R
 - **`Record.Lookup(field string) (string, bool)`**: Get field value and existence check (case-insensitive)
 - **`Record.Get(field string)`**: Get field value (case-insensitive, returns empty string if not found)
 - **`Record.Has(field string)`**: Check if field exists (case-insensitive)
-- **`Record.Fields()`**: List all field names
+- **`Record.Fields()`**: List all field names in order
+- **`Record.String()`**: Convert record back to Debian control format
 
 ### Validation
 

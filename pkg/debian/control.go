@@ -9,8 +9,15 @@ import (
 	"strings"
 )
 
+// Field represents a single field in a Debian control format file
+type Field struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
 // Record represents a single record (paragraph) in a Debian control format file
-type Record map[string]string
+// Fields are stored in a slice to preserve the original ordering for round-trip conversion
+type Record []Field
 
 // Parser parses Debian control format files
 type Parser struct{}
@@ -32,14 +39,17 @@ func (p *Parser) ParseRecords(r io.Reader) iter.Seq2[Record, error] {
 // parseRecords contains the actual parsing logic
 func (p *Parser) parseRecords(r io.Reader, yield func(Record, error) bool) error {
 	scanner := bufio.NewScanner(r)
-	currentRecord := make(Record)
+	var currentRecord Record
 	var currentField string
 	var currentValue strings.Builder
 
 	flushCurrentField := func() {
 		if currentField != "" {
 			value := strings.TrimSpace(currentValue.String())
-			currentRecord[currentField] = value
+			currentRecord = append(currentRecord, Field{
+				Name:  currentField,
+				Value: value,
+			})
 			currentField = ""
 			currentValue.Reset()
 		}
@@ -51,7 +61,7 @@ func (p *Parser) parseRecords(r io.Reader, yield func(Record, error) bool) error
 			if !yield(currentRecord, nil) {
 				return false // Stop iteration if yield returns false
 			}
-			currentRecord = make(Record)
+			currentRecord = Record{}
 		}
 		return true
 	}
@@ -92,19 +102,18 @@ func (p *Parser) parseRecords(r io.Reader, yield func(Record, error) bool) error
 		// Flush previous field
 		flushCurrentField()
 
-		// Validate and normalize field name
+		// Validate field name
 		fieldName := strings.TrimSpace(parts[0])
 		if err := p.validateFieldName(fieldName); err != nil {
 			return fmt.Errorf("invalid field name %q: %w", fieldName, err)
 		}
-		normalizedField := p.normalizeFieldName(fieldName)
 		
 		// Check for duplicate field in current record
-		if currentRecord.Has(normalizedField) {
-			return fmt.Errorf("duplicate field %q in record", normalizedField)
+		if currentRecord.Has(fieldName) {
+			return fmt.Errorf("duplicate field %q in record", fieldName)
 		}
 		
-		currentField = normalizedField
+		currentField = fieldName
 		value := strings.TrimLeft(parts[1], " \t")
 		currentValue.WriteString(value)
 	}
@@ -119,56 +128,6 @@ func (p *Parser) parseRecords(r io.Reader, yield func(Record, error) bool) error
 	return nil
 }
 
-// normalizeFieldName converts field names to standard case for consistent storage
-func (p *Parser) normalizeFieldName(name string) string {
-	// Convert to lowercase for comparison, but preserve standard casing
-	lower := strings.ToLower(name)
-	
-	// Standard field name mappings (case-insensitive input -> standard case output)
-	standardNames := map[string]string{
-		"package":        "Package",
-		"version":        "Version",
-		"architecture":   "Architecture",
-		"maintainer":     "Maintainer",
-		"depends":        "Depends",
-		"recommends":     "Recommends",
-		"suggests":       "Suggests",
-		"conflicts":      "Conflicts",
-		"breaks":         "Breaks",
-		"replaces":       "Replaces",
-		"provides":       "Provides",
-		"enhances":       "Enhances",
-		"pre-depends":    "Pre-Depends",
-		"installed-size": "Installed-Size",
-		"homepage":       "Homepage",
-		"description":    "Description",
-		"tag":            "Tag",
-		"section":        "Section",
-		"priority":       "Priority",
-		"essential":      "Essential",
-		"origin":         "Origin",
-		"label":          "Label",
-		"suite":          "Suite",
-		"codename":       "Codename",
-		"date":           "Date",
-		"valid-until":    "Valid-Until",
-		"architectures":  "Architectures",
-		"components":     "Components",
-		"md5sum":         "MD5sum",
-		"sha1":           "SHA1",
-		"sha256":         "SHA256",
-		"sha512":         "SHA512",
-		"filename":       "Filename",
-		"size":           "Size",
-	}
-	
-	if standard, exists := standardNames[lower]; exists {
-		return standard
-	}
-	
-	// For unknown fields, preserve original case
-	return name
-}
 
 // validateFieldName checks if a field name is valid according to Debian policy
 func (p *Parser) validateFieldName(name string) error {
@@ -195,14 +154,16 @@ func (p *Parser) validateFieldName(name string) error {
 // Returns the value and whether the field was found, following Go map idiom
 func (r Record) Lookup(field string) (string, bool) {
 	// Try exact match first
-	if value, exists := r[field]; exists {
-		return value, true
+	for _, f := range r {
+		if f.Name == field {
+			return f.Value, true
+		}
 	}
 	
 	// Try case-insensitive match
-	for k, v := range r {
-		if strings.EqualFold(k, field) {
-			return v, true
+	for _, f := range r {
+		if strings.EqualFold(f.Name, field) {
+			return f.Value, true
 		}
 	}
 	
@@ -225,8 +186,35 @@ func (r Record) Has(field string) bool {
 // Fields returns all field names in the record
 func (r Record) Fields() []string {
 	fields := make([]string, 0, len(r))
-	for field := range r {
-		fields = append(fields, field)
+	for _, f := range r {
+		fields = append(fields, f.Name)
 	}
 	return fields
+}
+
+// String returns the record as a Debian control format string
+func (r Record) String() string {
+	if len(r) == 0 {
+		return ""
+	}
+	
+	var sb strings.Builder
+	for _, field := range r {
+		sb.WriteString(field.Name)
+		sb.WriteString(": ")
+		
+		// Handle multi-line values
+		lines := strings.Split(field.Value, "\n")
+		sb.WriteString(lines[0])
+		sb.WriteString("\n")
+		
+		// Add continuation lines with proper indentation
+		for _, line := range lines[1:] {
+			sb.WriteString(" ")
+			sb.WriteString(line)
+			sb.WriteString("\n")
+		}
+	}
+	
+	return sb.String()
 }

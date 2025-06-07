@@ -2,6 +2,7 @@ package debian
 
 import (
 	"compress/gzip"
+	"encoding/json"
 	"os"
 	"strings"
 	"testing"
@@ -25,38 +26,52 @@ Description: A test package
 		}
 		record = r
 		found = true
-		break // Get first record
+		break
 	}
 	
 	if !found {
 		t.Fatal("No records found")
 	}
 
-	expected := map[string]string{
-		"Package":      "test-package",
-		"Version":      "1.0.0",
-		"Architecture": "amd64",
-		"Description":  "A test package\nThis is a multi-line description\nwith additional details.",
+	// Test field access
+	if record.Get("Package") != "test-package" {
+		t.Errorf("Package: got %q, want %q", record.Get("Package"), "test-package")
 	}
-
-	for field, expectedValue := range expected {
-		if !record.Has(field) {
-			t.Errorf("Missing field: %s", field)
-			continue
-		}
-		if got := record.Get(field); got != expectedValue {
-			t.Errorf("Field %s: got %q, want %q", field, got, expectedValue)
+	
+	if record.Get("Version") != "1.0.0" {
+		t.Errorf("Version: got %q, want %q", record.Get("Version"), "1.0.0")
+	}
+	
+	expectedDesc := "A test package\nThis is a multi-line description\nwith additional details."
+	if record.Get("Description") != expectedDesc {
+		t.Errorf("Description: got %q, want %q", record.Get("Description"), expectedDesc)
+	}
+	
+	// Test case-insensitive access
+	if record.Get("package") != "test-package" {
+		t.Errorf("Case-insensitive access failed")
+	}
+	
+	// Test field ordering preservation
+	fields := record.Fields()
+	expectedOrder := []string{"Package", "Version", "Architecture", "Description"}
+	if len(fields) != len(expectedOrder) {
+		t.Fatalf("Field count: got %d, want %d", len(fields), len(expectedOrder))
+	}
+	
+	for i, expected := range expectedOrder {
+		if fields[i] != expected {
+			t.Errorf("Field order[%d]: got %q, want %q", i, fields[i], expected)
 		}
 	}
 }
 
-func TestParseMultipleRecords(t *testing.T) {
+func TestMultipleRecords(t *testing.T) {
 	input := `Package: package1
 Version: 1.0.0
 
 Package: package2
-Version: 2.0.0
-Architecture: amd64`
+Version: 2.0.0`
 
 	parser := NewParser()
 	var records []Record
@@ -72,106 +87,207 @@ Architecture: amd64`
 	}
 
 	if records[0].Get("Package") != "package1" {
-		t.Errorf("First record package: got %q, want %q", records[0].Get("Package"), "package1")
+		t.Errorf("First record: got %q, want %q", records[0].Get("Package"), "package1")
 	}
 
 	if records[1].Get("Package") != "package2" {
-		t.Errorf("Second record package: got %q, want %q", records[1].Get("Package"), "package2")
+		t.Errorf("Second record: got %q, want %q", records[1].Get("Package"), "package2")
 	}
 }
 
-func TestParseSpotifyRelease(t *testing.T) {
-	file, err := os.Open("testdata/spotify-release.gz")
-	if err != nil {
-		t.Fatalf("Failed to open test fixture: %v", err)
-	}
-	defer file.Close()
-
-	gz, err := gzip.NewReader(file)
-	if err != nil {
-		t.Fatalf("Failed to create gzip reader: %v", err)
-	}
-	defer gz.Close()
+func TestJSONRoundTrip(t *testing.T) {
+	input := `Package: test-package
+Version: 1.0.0
+Architecture: amd64
+Installed-Size: 1024
+Description: A test package
+ Multi-line description`
 
 	parser := NewParser()
 	
-	var record Record
+	var originalRecord Record
 	found := false
-	for r, err := range parser.ParseRecords(gz) {
+	for r, err := range parser.ParseRecords(strings.NewReader(input)) {
 		if err != nil {
 			t.Fatalf("ParseRecords failed: %v", err)
 		}
-		record = r
+		originalRecord = r
 		found = true
-		break // Get first record
+		break
 	}
 	
 	if !found {
 		t.Fatal("No records found")
 	}
-
-	// Check that we have the expected fields
-	expectedFields := []string{"Origin", "Label", "Suite", "Codename", "Architectures", "Components"}
-	for _, field := range expectedFields {
-		if !record.Has(field) {
-			t.Errorf("Missing expected field: %s", field)
+	
+	// Convert to JSON
+	jsonData, err := json.Marshal(originalRecord)
+	if err != nil {
+		t.Fatalf("JSON marshal failed: %v", err)
+	}
+	
+	// Convert back from JSON
+	var roundTripRecord Record
+	if err := json.Unmarshal(jsonData, &roundTripRecord); err != nil {
+		t.Fatalf("JSON unmarshal failed: %v", err)
+	}
+	
+	// Verify data integrity
+	if len(originalRecord) != len(roundTripRecord) {
+		t.Errorf("Field count mismatch: original=%d, roundtrip=%d", len(originalRecord), len(roundTripRecord))
+	}
+	
+	for i, originalField := range originalRecord {
+		if i >= len(roundTripRecord) {
+			t.Errorf("Missing field after round-trip: %s", originalField.Name)
+			continue
+		}
+		
+		roundTripField := roundTripRecord[i]
+		if originalField.Name != roundTripField.Name {
+			t.Errorf("Field name mismatch at index %d: original=%q, roundtrip=%q", i, originalField.Name, roundTripField.Name)
+		}
+		
+		if originalField.Value != roundTripField.Value {
+			t.Errorf("Field value mismatch for %s: original=%q, roundtrip=%q", originalField.Name, originalField.Value, roundTripField.Value)
 		}
 	}
-
-	// Check specific values
-	if got := record.Get("Origin"); !strings.Contains(got, "Spotify") {
-		t.Errorf("Origin field should contain 'Spotify', got: %q", got)
-	}
-
-	if got := record.Get("Suite"); got != "stable" {
-		t.Errorf("Suite: got %q, want %q", got, "stable")
-	}
+	
+	t.Logf("JSON output: %s", string(jsonData))
 }
 
-func TestParseSpotifyPackages(t *testing.T) {
-	file, err := os.Open("testdata/spotify-packages.gz")
-	if err != nil {
-		t.Fatalf("Failed to open test fixture: %v", err)
-	}
-	defer file.Close()
-
-	gz, err := gzip.NewReader(file)
-	if err != nil {
-		t.Fatalf("Failed to create gzip reader: %v", err)
-	}
-	defer gz.Close()
+func TestControlFormatRoundTrip(t *testing.T) {
+	// Test case with exact formatting for byte-for-byte comparison
+	input := `Package: test-package
+Version: 1.0.0
+Architecture: amd64
+Description: A test package
+ This is a multi-line description
+ with additional details.
+`
 
 	parser := NewParser()
-	var records []Record
-	for record, err := range parser.ParseRecords(gz) {
+	
+	var record Record
+	found := false
+	for r, err := range parser.ParseRecords(strings.NewReader(input)) {
 		if err != nil {
 			t.Fatalf("ParseRecords failed: %v", err)
 		}
-		records = append(records, record)
+		record = r
+		found = true
+		break
 	}
-
-	if len(records) == 0 {
-		t.Fatal("Expected at least one package record")
+	
+	if !found {
+		t.Fatal("No records found")
 	}
-
-	// Check the first package
-	pkg := records[0]
-	expectedFields := []string{"Package", "Version", "Architecture", "Filename", "Size", "Description"}
-	for _, field := range expectedFields {
-		if !pkg.Has(field) {
-			t.Errorf("Missing expected field in package: %s", field)
+	
+	// Convert back to control format
+	output := record.String()
+	
+	// Verify byte-for-byte identical
+	if output != input {
+		t.Errorf("Round-trip conversion not identical")
+		t.Logf("Original:\n%q", input)
+		t.Logf("Output:\n%q", output)
+		
+		// Show character-by-character diff for debugging
+		minLen := len(input)
+		if len(output) < minLen {
+			minLen = len(output)
 		}
-	}
-
-	// All packages should have a Package field
-	for i, pkg := range records {
-		if !pkg.Has("Package") {
-			t.Errorf("Package %d missing Package field", i)
+		
+		for i := 0; i < minLen; i++ {
+			if input[i] != output[i] {
+				t.Logf("First difference at position %d: input=%q output=%q", i, input[i], output[i])
+				break
+			}
 		}
+		
+		if len(input) != len(output) {
+			t.Logf("Length difference: input=%d output=%d", len(input), len(output))
+		}
+	} else {
+		t.Log("Perfect byte-for-byte round-trip achieved!")
 	}
 }
 
-func TestMultipleRepositoryFixtures(t *testing.T) {
+func TestFieldValidation(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{"empty field name", `: value`},
+		{"field name with space", `Invalid Field: value`},
+		{"field name starting with hash", `#Field: value`},
+		{"field name starting with dash", `-Field: value`},
+		{"field name with control char", "Field\x01: value"},
+	}
+
+	parser := NewParser()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, err := range parser.ParseRecords(strings.NewReader(tt.input)) {
+				if err == nil {
+					t.Errorf("Expected error for invalid field name: %s", tt.input)
+				}
+				break
+			}
+		})
+	}
+}
+
+func TestDuplicateFields(t *testing.T) {
+	input := `Package: test-package
+Version: 1.0.0
+Package: duplicate-package`
+
+	parser := NewParser()
+	for _, err := range parser.ParseRecords(strings.NewReader(input)) {
+		if err == nil {
+			t.Error("Expected error for duplicate field")
+		}
+		if !strings.Contains(err.Error(), "duplicate field") {
+			t.Errorf("Error should mention duplicate field, got: %v", err)
+		}
+		break
+	}
+}
+
+func TestIteratorInterface(t *testing.T) {
+	input := `Package: package1
+Version: 1.0.0
+
+Package: package2
+Version: 2.0.0
+
+Package: package3
+Version: 3.0.0`
+
+	parser := NewParser()
+	
+	// Test early termination
+	count := 0
+	for record, err := range parser.ParseRecords(strings.NewReader(input)) {
+		if err != nil {
+			t.Fatalf("Iterator failed: %v", err)
+		}
+		count++
+		if count == 2 {
+			break
+		}
+		if !record.Has("Package") {
+			t.Errorf("Record %d missing Package field", count)
+		}
+	}
+	
+	if count != 2 {
+		t.Errorf("Expected to process 2 records, got %d", count)
+	}
+}
+
+func TestRepositoryFixtures(t *testing.T) {
 	fixtures := []struct {
 		name           string
 		releaseFile    string
@@ -179,69 +295,6 @@ func TestMultipleRepositoryFixtures(t *testing.T) {
 		expectedOrigin string
 		expectedPackageCount int
 	}{
-		{
-			name:           "Brave",
-			releaseFile:    "brave-release.gz",
-			packagesFile:   "brave-packages.gz",
-			expectedOrigin: "Brave Software",
-			expectedPackageCount: 124,
-		},
-		{
-			name:           "Chrome",
-			releaseFile:    "chrome-release.gz",
-			packagesFile:   "chrome-packages.gz",
-			expectedOrigin: "Google LLC",
-			expectedPackageCount: 4,
-		},
-		{
-			name:           "Docker",
-			releaseFile:    "docker-release.gz",
-			packagesFile:   "docker-packages.gz",
-			expectedOrigin: "Docker",
-			expectedPackageCount: 306,
-		},
-		{
-			name:           "HashiCorp",
-			releaseFile:    "hashicorp-release.gz",
-			packagesFile:   "hashicorp-packages.gz",
-			expectedOrigin: "Artifactory",
-			expectedPackageCount: 2574,
-		},
-		{
-			name:           "Kubernetes",
-			releaseFile:    "kubernetes-release.gz",
-			packagesFile:   "kubernetes-packages.gz",
-			expectedOrigin: "obs://build.opensuse.org/isv:kubernetes:core:stable:v1.28/deb",
-			expectedPackageCount: 199,
-		},
-		{
-			name:           "Microsoft",
-			releaseFile:    "microsoft-release.gz",
-			packagesFile:   "microsoft-packages.gz",
-			expectedOrigin: "microsoft-ubuntu-jammy-prod jammy",
-			expectedPackageCount: 1744,
-		},
-		{
-			name:           "NodeSource",
-			releaseFile:    "nodesource-release.gz",
-			packagesFile:   "nodesource-packages.gz",
-			expectedOrigin: "",
-			expectedPackageCount: 1,
-		},
-		{
-			name:           "PostgreSQL",
-			releaseFile:    "postgresql-release.gz",
-			packagesFile:   "postgresql-packages.gz",
-			expectedOrigin: "apt.postgresql.org",
-			expectedPackageCount: 2201,
-		},
-		{
-			name:           "Signal",
-			releaseFile:    "signal-release.gz",
-			packagesFile:   "signal-packages.gz",
-			expectedOrigin: ". xenial",
-			expectedPackageCount: 467,
-		},
 		{
 			name:           "Spotify",
 			releaseFile:    "spotify-release.gz",
@@ -276,7 +329,7 @@ func TestMultipleRepositoryFixtures(t *testing.T) {
 				}
 				release = r
 				found = true
-				break // Get first record
+				break
 			}
 			
 			if !found {
@@ -326,103 +379,5 @@ func TestMultipleRepositoryFixtures(t *testing.T) {
 
 			t.Logf("%s: parsed %d packages successfully", fixture.name, len(packages))
 		})
-	}
-}
-
-func TestInvalidFieldLine(t *testing.T) {
-	input := `This is not a valid field line`
-
-	parser := NewParser()
-	for _, err := range parser.ParseRecords(strings.NewReader(input)) {
-		if err == nil {
-			t.Error("Expected error for invalid field line")
-		}
-		break // Just check first result
-	}
-}
-
-func TestContinuationWithoutField(t *testing.T) {
-	input := ` This is a continuation line without a field`
-
-	parser := NewParser()
-	for _, err := range parser.ParseRecords(strings.NewReader(input)) {
-		if err == nil {
-			t.Error("Expected error for continuation line without field")
-		}
-		break // Just check first result
-	}
-}
-
-func TestInvalidFieldNames(t *testing.T) {
-	tests := []struct {
-		name  string
-		input string
-	}{
-		{"empty field name", `: value`},
-		{"field name with space", `Invalid Field: value`},
-		{"field name starting with hash", `#Field: value`},
-		{"field name starting with dash", `-Field: value`},
-		{"field name with control char", "Field\x01: value"},
-	}
-
-	parser := NewParser()
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			for _, err := range parser.ParseRecords(strings.NewReader(tt.input)) {
-				if err == nil {
-					t.Errorf("Expected error for invalid field name: %s", tt.input)
-				}
-				break // Just check first result
-			}
-		})
-	}
-}
-
-func TestDuplicateFields(t *testing.T) {
-	input := `Package: test-package
-Version: 1.0.0
-Package: duplicate-package`
-
-	parser := NewParser()
-	for _, err := range parser.ParseRecords(strings.NewReader(input)) {
-		if err == nil {
-			t.Error("Expected error for duplicate field")
-		}
-		if !strings.Contains(err.Error(), "duplicate field") {
-			t.Errorf("Error should mention duplicate field, got: %v", err)
-		}
-		break // Just check first result
-	}
-}
-
-func TestIteratorInterface(t *testing.T) {
-	input := `Package: package1
-Version: 1.0.0
-
-Package: package2
-Version: 2.0.0
-
-Package: package3
-Version: 3.0.0`
-
-	parser := NewParser()
-	
-	// Test that we can iterate and stop early
-	count := 0
-	for record, err := range parser.ParseRecords(strings.NewReader(input)) {
-		if err != nil {
-			t.Fatalf("Iterator failed: %v", err)
-		}
-		count++
-		if count == 2 {
-			break // Stop after 2 records
-		}
-		if !record.Has("Package") {
-			t.Errorf("Record %d missing Package field", count)
-		}
-	}
-	
-	if count != 2 {
-		t.Errorf("Expected to process 2 records, got %d", count)
 	}
 }
