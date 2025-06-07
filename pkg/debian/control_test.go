@@ -6,6 +6,9 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestParseSimpleRecord(t *testing.T) {
@@ -21,49 +24,29 @@ Description: A test package
 	var record Record
 	found := false
 	for r, err := range parser.ParseRecords(strings.NewReader(input)) {
-		if err != nil {
-			t.Fatalf("ParseRecords failed: %v", err)
-		}
+		require.NoError(t, err)
 		record = r
 		found = true
 		break
 	}
 	
-	if !found {
-		t.Fatal("No records found")
-	}
+	require.True(t, found, "No records found")
 
 	// Test field access
-	if record.Get("Package") != "test-package" {
-		t.Errorf("Package: got %q, want %q", record.Get("Package"), "test-package")
-	}
-	
-	if record.Get("Version") != "1.0.0" {
-		t.Errorf("Version: got %q, want %q", record.Get("Version"), "1.0.0")
-	}
+	assert.Equal(t, "test-package", record.Get("Package"))
+	assert.Equal(t, "1.0.0", record.Get("Version"))
+	assert.Equal(t, "amd64", record.Get("Architecture"))
 	
 	expectedDesc := "A test package\nThis is a multi-line description\nwith additional details."
-	if record.Get("Description") != expectedDesc {
-		t.Errorf("Description: got %q, want %q", record.Get("Description"), expectedDesc)
-	}
+	assert.Equal(t, expectedDesc, record.Get("Description"))
 	
 	// Test case-insensitive access
-	if record.Get("package") != "test-package" {
-		t.Errorf("Case-insensitive access failed")
-	}
+	assert.Equal(t, "test-package", record.Get("package"))
 	
 	// Test field ordering preservation
 	fields := record.Fields()
 	expectedOrder := []string{"Package", "Version", "Architecture", "Description"}
-	if len(fields) != len(expectedOrder) {
-		t.Fatalf("Field count: got %d, want %d", len(fields), len(expectedOrder))
-	}
-	
-	for i, expected := range expectedOrder {
-		if fields[i] != expected {
-			t.Errorf("Field order[%d]: got %q, want %q", i, fields[i], expected)
-		}
-	}
+	assert.Equal(t, expectedOrder, fields)
 }
 
 func TestMultipleRecords(t *testing.T) {
@@ -76,23 +59,13 @@ Version: 2.0.0`
 	parser := NewParser()
 	var records []Record
 	for record, err := range parser.ParseRecords(strings.NewReader(input)) {
-		if err != nil {
-			t.Fatalf("ParseRecords failed: %v", err)
-		}
+		require.NoError(t, err)
 		records = append(records, record)
 	}
 
-	if len(records) != 2 {
-		t.Fatalf("Expected 2 records, got %d", len(records))
-	}
-
-	if records[0].Get("Package") != "package1" {
-		t.Errorf("First record: got %q, want %q", records[0].Get("Package"), "package1")
-	}
-
-	if records[1].Get("Package") != "package2" {
-		t.Errorf("Second record: got %q, want %q", records[1].Get("Package"), "package2")
-	}
+	assert.Len(t, records, 2)
+	assert.Equal(t, "package1", records[0].Get("Package"))
+	assert.Equal(t, "package2", records[1].Get("Package"))
 }
 
 func TestJSONRoundTrip(t *testing.T) {
@@ -108,56 +81,35 @@ Description: A test package
 	var originalRecord Record
 	found := false
 	for r, err := range parser.ParseRecords(strings.NewReader(input)) {
-		if err != nil {
-			t.Fatalf("ParseRecords failed: %v", err)
-		}
+		require.NoError(t, err)
 		originalRecord = r
 		found = true
 		break
 	}
+	require.True(t, found)
 	
-	if !found {
-		t.Fatal("No records found")
-	}
-	
-	// Convert to JSON
+	// Convert to JSON and back
 	jsonData, err := json.Marshal(originalRecord)
-	if err != nil {
-		t.Fatalf("JSON marshal failed: %v", err)
-	}
+	require.NoError(t, err)
 	
-	// Convert back from JSON
 	var roundTripRecord Record
-	if err := json.Unmarshal(jsonData, &roundTripRecord); err != nil {
-		t.Fatalf("JSON unmarshal failed: %v", err)
-	}
+	require.NoError(t, json.Unmarshal(jsonData, &roundTripRecord))
 	
-	// Verify data integrity
-	if len(originalRecord) != len(roundTripRecord) {
-		t.Errorf("Field count mismatch: original=%d, roundtrip=%d", len(originalRecord), len(roundTripRecord))
-	}
+	// Verify perfect data integrity
+	assert.Len(t, roundTripRecord, len(originalRecord))
 	
 	for i, originalField := range originalRecord {
-		if i >= len(roundTripRecord) {
-			t.Errorf("Missing field after round-trip: %s", originalField.Name)
-			continue
-		}
+		require.Less(t, i, len(roundTripRecord), "Missing field after round-trip: %s", originalField.Name)
 		
 		roundTripField := roundTripRecord[i]
-		if originalField.Name != roundTripField.Name {
-			t.Errorf("Field name mismatch at index %d: original=%q, roundtrip=%q", i, originalField.Name, roundTripField.Name)
-		}
-		
-		if originalField.Value != roundTripField.Value {
-			t.Errorf("Field value mismatch for %s: original=%q, roundtrip=%q", originalField.Name, originalField.Value, roundTripField.Value)
-		}
+		assert.Equal(t, originalField.Name, roundTripField.Name)
+		assert.Equal(t, originalField.Value, roundTripField.Value)
 	}
 	
 	t.Logf("JSON output: %s", string(jsonData))
 }
 
 func TestControlFormatRoundTrip(t *testing.T) {
-	// Test case with exact formatting for byte-for-byte comparison
 	input := `Package: test-package
 Version: 1.0.0
 Architecture: amd64
@@ -171,46 +123,16 @@ Description: A test package
 	var record Record
 	found := false
 	for r, err := range parser.ParseRecords(strings.NewReader(input)) {
-		if err != nil {
-			t.Fatalf("ParseRecords failed: %v", err)
-		}
+		require.NoError(t, err)
 		record = r
 		found = true
 		break
 	}
+	require.True(t, found)
 	
-	if !found {
-		t.Fatal("No records found")
-	}
-	
-	// Convert back to control format
+	// Convert back to control format and verify byte-for-byte identical
 	output := record.String()
-	
-	// Verify byte-for-byte identical
-	if output != input {
-		t.Errorf("Round-trip conversion not identical")
-		t.Logf("Original:\n%q", input)
-		t.Logf("Output:\n%q", output)
-		
-		// Show character-by-character diff for debugging
-		minLen := len(input)
-		if len(output) < minLen {
-			minLen = len(output)
-		}
-		
-		for i := 0; i < minLen; i++ {
-			if input[i] != output[i] {
-				t.Logf("First difference at position %d: input=%q output=%q", i, input[i], output[i])
-				break
-			}
-		}
-		
-		if len(input) != len(output) {
-			t.Logf("Length difference: input=%d output=%d", len(input), len(output))
-		}
-	} else {
-		t.Log("Perfect byte-for-byte round-trip achieved!")
-	}
+	assert.Equal(t, input, output, "Round-trip conversion not identical")
 }
 
 func TestFieldValidation(t *testing.T) {
@@ -229,9 +151,7 @@ func TestFieldValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			for _, err := range parser.ParseRecords(strings.NewReader(tt.input)) {
-				if err == nil {
-					t.Errorf("Expected error for invalid field name: %s", tt.input)
-				}
+				assert.Error(t, err, "Expected error for invalid field name: %s", tt.input)
 				break
 			}
 		})
@@ -245,12 +165,8 @@ Package: duplicate-package`
 
 	parser := NewParser()
 	for _, err := range parser.ParseRecords(strings.NewReader(input)) {
-		if err == nil {
-			t.Error("Expected error for duplicate field")
-		}
-		if !strings.Contains(err.Error(), "duplicate field") {
-			t.Errorf("Error should mention duplicate field, got: %v", err)
-		}
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "duplicate field")
 		break
 	}
 }
@@ -270,36 +186,72 @@ Version: 3.0.0`
 	// Test early termination
 	count := 0
 	for record, err := range parser.ParseRecords(strings.NewReader(input)) {
-		if err != nil {
-			t.Fatalf("Iterator failed: %v", err)
-		}
+		require.NoError(t, err)
 		count++
 		if count == 2 {
 			break
 		}
-		if !record.Has("Package") {
-			t.Errorf("Record %d missing Package field", count)
-		}
+		assert.True(t, record.Has("Package"))
 	}
 	
-	if count != 2 {
-		t.Errorf("Expected to process 2 records, got %d", count)
+	assert.Equal(t, 2, count)
+}
+
+func TestAccessorMethods(t *testing.T) {
+	input := `Package: test-package
+Version: 1.0.0`
+
+	parser := NewParser()
+	
+	var record Record
+	for r, err := range parser.ParseRecords(strings.NewReader(input)) {
+		require.NoError(t, err)
+		record = r
+		break
 	}
+
+	// Test Lookup method
+	value, exists := record.Lookup("Package")
+	assert.True(t, exists)
+	assert.Equal(t, "test-package", value)
+	
+	value, exists = record.Lookup("NonExistent")
+	assert.False(t, exists)
+	assert.Empty(t, value)
+	
+	// Test case-insensitive lookup
+	value, exists = record.Lookup("package")
+	assert.True(t, exists)
+	assert.Equal(t, "test-package", value)
+	
+	// Test Has method
+	assert.True(t, record.Has("Package"))
+	assert.True(t, record.Has("version")) // case-insensitive
+	assert.False(t, record.Has("NonExistent"))
+	
+	// Test Get method
+	assert.Equal(t, "test-package", record.Get("Package"))
+	assert.Equal(t, "1.0.0", record.Get("version")) // case-insensitive
+	assert.Empty(t, record.Get("NonExistent"))
+	
+	// Test Fields method
+	fields := record.Fields()
+	assert.Equal(t, []string{"Package", "Version"}, fields)
 }
 
 func TestRepositoryFixtures(t *testing.T) {
 	fixtures := []struct {
-		name           string
-		releaseFile    string
-		packagesFile   string
-		expectedOrigin string
+		name                 string
+		releaseFile          string
+		packagesFile         string
+		expectedOrigin       string
 		expectedPackageCount int
 	}{
 		{
-			name:           "Spotify",
-			releaseFile:    "spotify-release.gz",
-			packagesFile:   "spotify-packages.gz",
-			expectedOrigin: "Spotify LTD",
+			name:                 "Spotify",
+			releaseFile:          "spotify-release.gz",
+			packagesFile:         "spotify-packages.gz",
+			expectedOrigin:       "Spotify LTD",
 			expectedPackageCount: 4,
 		},
 	}
@@ -310,71 +262,48 @@ func TestRepositoryFixtures(t *testing.T) {
 		t.Run(fixture.name, func(t *testing.T) {
 			// Test Release file
 			releaseFile, err := os.Open("testdata/" + fixture.releaseFile)
-			if err != nil {
-				t.Fatalf("Failed to open %s: %v", fixture.releaseFile, err)
-			}
+			require.NoError(t, err)
 			defer releaseFile.Close()
 
 			gz, err := gzip.NewReader(releaseFile)
-			if err != nil {
-				t.Fatalf("Failed to create gzip reader for %s: %v", fixture.releaseFile, err)
-			}
+			require.NoError(t, err)
 			defer gz.Close()
 
 			var release Record
 			found := false
 			for r, err := range parser.ParseRecords(gz) {
-				if err != nil {
-					t.Fatalf("Failed to parse %s: %v", fixture.releaseFile, err)
-				}
+				require.NoError(t, err)
 				release = r
 				found = true
 				break
 			}
-			
-			if !found {
-				t.Fatalf("No release record found in %s", fixture.releaseFile)
-			}
+			require.True(t, found)
 
 			// Check Origin field
-			if got := release.Get("Origin"); got != fixture.expectedOrigin {
-				t.Errorf("%s Origin: got %q, want %q", fixture.name, got, fixture.expectedOrigin)
-			}
+			assert.Equal(t, fixture.expectedOrigin, release.Get("Origin"))
 
 			// Test Packages file
 			packagesFile, err := os.Open("testdata/" + fixture.packagesFile)
-			if err != nil {
-				t.Fatalf("Failed to open %s: %v", fixture.packagesFile, err)
-			}
+			require.NoError(t, err)
 			defer packagesFile.Close()
 
 			pgz, err := gzip.NewReader(packagesFile)
-			if err != nil {
-				t.Fatalf("Failed to create gzip reader for %s: %v", fixture.packagesFile, err)
-			}
+			require.NoError(t, err)
 			defer pgz.Close()
 
 			var packages []Record
 			for record, err := range parser.ParseRecords(pgz) {
-				if err != nil {
-					t.Fatalf("Failed to parse %s: %v", fixture.packagesFile, err)
-				}
+				require.NoError(t, err)
 				packages = append(packages, record)
 			}
 
 			// Verify expected package count
-			if len(packages) != fixture.expectedPackageCount {
-				t.Errorf("%s: expected %d packages, got %d", fixture.name, fixture.expectedPackageCount, len(packages))
-			}
+			assert.Len(t, packages, fixture.expectedPackageCount)
 
 			// Verify all packages have required fields
 			for i, pkg := range packages {
-				if !pkg.Has("Package") {
-					t.Errorf("%s package %d: missing Package field", fixture.name, i)
-				}
-				if !pkg.Has("Version") {
-					t.Errorf("%s package %d: missing Version field", fixture.name, i)
-				}
+				assert.True(t, pkg.Has("Package"), "%s package %d: missing Package field", fixture.name, i)
+				assert.True(t, pkg.Has("Version"), "%s package %d: missing Version field", fixture.name, i)
 			}
 
 			t.Logf("%s: parsed %d packages successfully", fixture.name, len(packages))
