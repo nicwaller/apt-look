@@ -23,6 +23,10 @@ This is a Go-based CLI application with the following planned components:
 
 - Always fetch the latest Release file (no caching)
 - Cache Packages files locally on disk in `$XDG_CACHE_HOME/apt-look/` (fallback to `~/.cache/apt-look/` if XDG_CACHE_HOME not set)
+- Use content-based naming: cache files are named using the MD5 hash of the plaintext contents
+- Cache files should be gzip-compressed, but the name is still based on the plaintext contents.
+- The `purge-cache` subcommand purges the apt-look cache
+- The `--no-cache` flag disables use of the cache. This can be useful during troubleshooting, such as when troubleshooting a webserver and reviewing request logs. 
 
 ## GPG Verification
 
