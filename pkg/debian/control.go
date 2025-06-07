@@ -199,10 +199,9 @@ func (r Record) Fields() []string {
 	return fields
 }
 
-// String returns the record as a Debian control format string
-func (r Record) String() string {
+func (r Record) Write(writer io.Writer) (int, error) {
 	if len(r) == 0 {
-		return ""
+		return 0, nil
 	}
 
 	var sb strings.Builder
@@ -223,5 +222,5 @@ func (r Record) String() string {
 		}
 	}
 
-	return sb.String()
+	return writer.Write([]byte(sb.String()))
 }

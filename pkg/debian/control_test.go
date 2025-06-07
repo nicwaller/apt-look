@@ -133,7 +133,9 @@ Description: A test package
 	require.True(t, found)
 
 	// Convert back to control format and verify byte-for-byte identical
-	output := record.String()
+	var sb strings.Builder
+	_, _ = record.Write(&sb)
+	output := sb.String()
 	assert.Equal(t, input, output, "Round-trip conversion not identical")
 }
 
