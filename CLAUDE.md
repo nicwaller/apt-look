@@ -27,6 +27,7 @@ This is a Go-based CLI application with the following planned components:
 - Cache files should be gzip-compressed, but the name is still based on the plaintext contents.
 - The `purge-cache` subcommand purges the apt-look cache
 - The `--no-cache` flag disables use of the cache. This can be useful during troubleshooting, such as when troubleshooting a webserver and reviewing request logs. 
+- When running on a Debian distribution (including Ubuntu), scan `/var/lib/apt/lists` at startup for any files modified more recently than the newest cache file. Any new files should be incorporated into the apt-look cache.
 
 ## GPG Verification
 
