@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"path/filepath"
 )
 
 func TestParseSimpleRecord(t *testing.T) {
@@ -309,4 +310,69 @@ func TestRepositoryFixtures(t *testing.T) {
 			t.Logf("%s: parsed %d packages successfully", fixture.name, len(packages))
 		})
 	}
+}
+
+func TestAllTestdataFiles(t *testing.T) {
+	// Get all .gz files in testdata directory
+	testdataDir := "testdata"
+	files, err := filepath.Glob(filepath.Join(testdataDir, "*.gz"))
+	require.NoError(t, err, "Failed to read testdata directory")
+	require.NotEmpty(t, files, "No test files found in testdata directory")
+
+	parser := NewParser()
+
+	for _, filePath := range files {
+		fileName := filepath.Base(filePath)
+		t.Run(fileName, func(t *testing.T) {
+			file, err := os.Open(filePath)
+			require.NoError(t, err, "Failed to open %s", fileName)
+			defer file.Close()
+
+			gz, err := gzip.NewReader(file)
+			require.NoError(t, err, "Failed to create gzip reader for %s", fileName)
+			defer gz.Close()
+
+			var recordCount int
+			var hasPackageField bool
+			var hasReleaseFields bool
+
+			for record, err := range parser.ParseRecords(gz) {
+				require.NoError(t, err, "Failed to parse record %d in %s", recordCount+1, fileName)
+				require.NotEmpty(t, record, "Empty record %d in %s", recordCount+1, fileName)
+				
+				recordCount++
+				
+				// Track what kind of file this appears to be
+				if record.Has("Package") {
+					hasPackageField = true
+				}
+				if record.Has("Origin") || record.Has("Suite") || record.Has("Codename") {
+					hasReleaseFields = true
+				}
+				
+				// Verify each record has at least one field
+				assert.True(t, len(record) > 0, "Record %d in %s has no fields", recordCount, fileName)
+				
+				// Verify all field names are non-empty
+				for _, field := range record {
+					assert.NotEmpty(t, field.Name, "Empty field name in record %d of %s", recordCount, fileName)
+				}
+			}
+
+			require.Greater(t, recordCount, 0, "No records found in %s", fileName)
+			
+			// Categorize and log the file type
+			if strings.Contains(fileName, "release") {
+				assert.True(t, hasReleaseFields, "%s appears to be a release file but lacks release fields", fileName)
+				t.Logf("%s: parsed %d release record(s) successfully", fileName, recordCount)
+			} else if strings.Contains(fileName, "packages") {
+				assert.True(t, hasPackageField, "%s appears to be a packages file but lacks Package fields", fileName)
+				t.Logf("%s: parsed %d package record(s) successfully", fileName, recordCount)
+			} else {
+				t.Logf("%s: parsed %d record(s) successfully (unknown type)", fileName, recordCount)
+			}
+		})
+	}
+	
+	t.Logf("Successfully tested %d testdata files", len(files))
 }
