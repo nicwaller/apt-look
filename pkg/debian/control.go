@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 )
 
@@ -64,6 +65,11 @@ func (p *Parser) ParseRecords(r io.Reader) ([]Record, error) {
 	for scanner.Scan() {
 		line := scanner.Text()
 
+		// Skip comment lines (start with '#')
+		if strings.HasPrefix(strings.TrimLeft(line, " \t"), "#") {
+			continue
+		}
+
 		// Empty line indicates end of record
 		if strings.TrimSpace(line) == "" {
 			flushCurrentRecord()
@@ -90,9 +96,19 @@ func (p *Parser) ParseRecords(r io.Reader) ([]Record, error) {
 		// Flush previous field
 		flushCurrentField()
 
-		// Start new field - normalize field name to standard case
+		// Validate and normalize field name
 		fieldName := strings.TrimSpace(parts[0])
-		currentField = p.normalizeFieldName(fieldName)
+		if err := p.validateFieldName(fieldName); err != nil {
+			return nil, fmt.Errorf("invalid field name %q: %w", fieldName, err)
+		}
+		normalizedField := p.normalizeFieldName(fieldName)
+		
+		// Check for duplicate field in current record
+		if currentRecord.Has(normalizedField) {
+			return nil, fmt.Errorf("duplicate field %q in record", normalizedField)
+		}
+		
+		currentField = normalizedField
 		value := strings.TrimLeft(parts[1], " \t")
 		currentValue.WriteString(value)
 	}
@@ -156,6 +172,27 @@ func (p *Parser) normalizeFieldName(name string) string {
 	
 	// For unknown fields, preserve original case
 	return name
+}
+
+// validateFieldName checks if a field name is valid according to Debian policy
+func (p *Parser) validateFieldName(name string) error {
+	// Field names must not be empty
+	if name == "" {
+		return fmt.Errorf("field name cannot be empty")
+	}
+	
+	// Field names must not start with '#' or '-'
+	if strings.HasPrefix(name, "#") || strings.HasPrefix(name, "-") {
+		return fmt.Errorf("field name cannot start with '#' or '-'")
+	}
+	
+	// Field names must use only US-ASCII characters, excluding control characters, spaces, and colons
+	validFieldName := regexp.MustCompile(`^[!-9;-~]+$`) // ASCII printable chars except space (0x20) and colon (0x3A)
+	if !validFieldName.MatchString(name) {
+		return fmt.Errorf("field name contains invalid characters (must be US-ASCII excluding control chars, spaces, and colons)")
+	}
+	
+	return nil
 }
 
 // Get retrieves a field value from a record (case-insensitive)

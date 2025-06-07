@@ -266,3 +266,41 @@ func TestContinuationWithoutField(t *testing.T) {
 		t.Error("Expected error for continuation line without field")
 	}
 }
+
+func TestInvalidFieldNames(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{"empty field name", `: value`},
+		{"field name with space", `Invalid Field: value`},
+		{"field name starting with hash", `#Field: value`},
+		{"field name starting with dash", `-Field: value`},
+		{"field name with control char", "Field\x01: value"},
+	}
+
+	parser := NewParser()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := parser.ParseRecord(strings.NewReader(tt.input))
+			if err == nil {
+				t.Errorf("Expected error for invalid field name: %s", tt.input)
+			}
+		})
+	}
+}
+
+func TestDuplicateFields(t *testing.T) {
+	input := `Package: test-package
+Version: 1.0.0
+Package: duplicate-package`
+
+	parser := NewParser()
+	_, err := parser.ParseRecord(strings.NewReader(input))
+	if err == nil {
+		t.Error("Expected error for duplicate field")
+	}
+	if !strings.Contains(err.Error(), "duplicate field") {
+		t.Errorf("Error should mention duplicate field, got: %v", err)
+	}
+}
