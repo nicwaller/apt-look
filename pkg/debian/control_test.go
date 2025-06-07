@@ -143,6 +143,110 @@ func TestParseSpotifyPackages(t *testing.T) {
 	}
 }
 
+func TestMultipleRepositoryFixtures(t *testing.T) {
+	fixtures := []struct {
+		name         string
+		releaseFile  string
+		packagesFile string
+		expectedOrigin string
+	}{
+		{
+			name:         "PostgreSQL",
+			releaseFile:  "postgresql-release.gz",
+			packagesFile: "postgresql-packages.gz",
+			expectedOrigin: "apt.postgresql.org",
+		},
+		{
+			name:         "HashiCorp",
+			releaseFile:  "hashicorp-release.gz",
+			packagesFile: "hashicorp-packages.gz",
+			expectedOrigin: "Artifactory",
+		},
+		{
+			name:         "Docker",
+			releaseFile:  "docker-release.gz",
+			packagesFile: "docker-packages.gz",
+			expectedOrigin: "Docker",
+		},
+		{
+			name:         "Microsoft",
+			releaseFile:  "microsoft-release.gz",
+			packagesFile: "microsoft-packages.gz",
+			expectedOrigin: "microsoft-ubuntu-jammy-prod jammy",
+		},
+		{
+			name:         "Kubernetes",
+			releaseFile:  "kubernetes-release.gz",
+			packagesFile: "kubernetes-packages.gz",
+			expectedOrigin: "obs://build.opensuse.org/isv:kubernetes:core:stable:v1.28/deb",
+		},
+	}
+
+	parser := NewParser()
+
+	for _, fixture := range fixtures {
+		t.Run(fixture.name, func(t *testing.T) {
+			// Test Release file
+			releaseFile, err := os.Open("testdata/" + fixture.releaseFile)
+			if err != nil {
+				t.Fatalf("Failed to open %s: %v", fixture.releaseFile, err)
+			}
+			defer releaseFile.Close()
+
+			gz, err := gzip.NewReader(releaseFile)
+			if err != nil {
+				t.Fatalf("Failed to create gzip reader for %s: %v", fixture.releaseFile, err)
+			}
+			defer gz.Close()
+
+			release, err := parser.ParseRecord(gz)
+			if err != nil {
+				t.Fatalf("Failed to parse %s: %v", fixture.releaseFile, err)
+			}
+
+			// Check Origin field
+			if got := release.Get("Origin"); got != fixture.expectedOrigin {
+				t.Errorf("%s Origin: got %q, want %q", fixture.name, got, fixture.expectedOrigin)
+			}
+
+			// Test Packages file
+			packagesFile, err := os.Open("testdata/" + fixture.packagesFile)
+			if err != nil {
+				t.Fatalf("Failed to open %s: %v", fixture.packagesFile, err)
+			}
+			defer packagesFile.Close()
+
+			pgz, err := gzip.NewReader(packagesFile)
+			if err != nil {
+				t.Fatalf("Failed to create gzip reader for %s: %v", fixture.packagesFile, err)
+			}
+			defer pgz.Close()
+
+			packages, err := parser.ParseRecords(pgz)
+			if err != nil {
+				t.Fatalf("Failed to parse %s: %v", fixture.packagesFile, err)
+			}
+
+			if len(packages) == 0 {
+				t.Errorf("%s: Expected at least one package", fixture.name)
+				return
+			}
+
+			// Verify all packages have required fields
+			for i, pkg := range packages {
+				if !pkg.Has("Package") {
+					t.Errorf("%s package %d: missing Package field", fixture.name, i)
+				}
+				if !pkg.Has("Version") {
+					t.Errorf("%s package %d: missing Version field", fixture.name, i)
+				}
+			}
+
+			t.Logf("%s: parsed %d packages successfully", fixture.name, len(packages))
+		})
+	}
+}
+
 func TestInvalidFieldLine(t *testing.T) {
 	input := `This is not a valid field line`
 
