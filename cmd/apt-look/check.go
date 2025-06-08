@@ -95,7 +95,7 @@ func runCheck(sourceStr, format string) error {
 	return nil
 }
 
-func performIntegrityCheck(source sources.SourceEntry) (*CheckResult, *apttransport.Registry, error) {
+func performIntegrityCheck(source sources.Entry) (*CheckResult, *apttransport.Registry, error) {
 	result := &CheckResult{}
 
 	// Use the transport registry with caching

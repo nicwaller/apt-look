@@ -233,7 +233,7 @@ func runInfo(source, packageName, format string) error {
 	return nil
 }
 
-func parseSourceInput(source string) ([]sources.SourceEntry, error) {
+func parseSourceInput(source string) ([]sources.Entry, error) {
 	// Check if it's a file path
 	if strings.HasPrefix(source, "/") || strings.HasPrefix(source, "./") || strings.HasPrefix(source, "../") {
 		file, err := os.Open(source)
@@ -251,7 +251,7 @@ func parseSourceInput(source string) ([]sources.SourceEntry, error) {
 	}
 
 	// Parse as single source line
-	var entries []sources.SourceEntry
+	var entries []sources.Entry
 	for entry, err := range sources.ParseSources(strings.NewReader(source)) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse source line: %w", err)
@@ -262,7 +262,7 @@ func parseSourceInput(source string) ([]sources.SourceEntry, error) {
 	return entries, nil
 }
 
-func processPackagesFileFromRelease(registry *apttransport.Registry, source sources.SourceEntry, fileInfo deb822.FileInfo, stats *RepositoryStats) error {
+func processPackagesFileFromRelease(registry *apttransport.Registry, source sources.Entry, fileInfo deb822.FileInfo, stats *RepositoryStats) error {
 	// Construct URL using the exact path from the Release file
 	packagesURL := strings.TrimSuffix(source.URI, "/") + "/dists/" + source.Distribution + "/" + fileInfo.Path
 
@@ -327,7 +327,7 @@ func processPackagesFileFromRelease(registry *apttransport.Registry, source sour
 	return nil
 }
 
-func processPackagesFile(registry *apttransport.Registry, source sources.SourceEntry, component, arch string, stats *RepositoryStats) error {
+func processPackagesFile(registry *apttransport.Registry, source sources.Entry, component, arch string, stats *RepositoryStats) error {
 	// Try different possible Packages file locations
 	possiblePaths := []string{
 		fmt.Sprintf("/dists/%s/%s/binary-%s/Packages.gz", source.Distribution, component, arch),

@@ -16,7 +16,7 @@ import (
 	"github.com/nicwaller/apt-look/pkg/deb822"
 )
 
-func runStats(sources []sources.SourceEntry, format string) error {
+func runStats(sources []sources.Entry, format string) error {
 	if len(sources) != 1 {
 		return fmt.Errorf("expected 1 source, got %d", len(sources))
 	}
@@ -77,7 +77,7 @@ type RepositoryStats struct {
 	} `json:"packages"`
 }
 
-func calculateRepositoryStats(source sources.SourceEntry) (*RepositoryStats, *apttransport.Registry, error) {
+func calculateRepositoryStats(source sources.Entry) (*RepositoryStats, *apttransport.Registry, error) {
 	stats := &RepositoryStats{}
 
 	// Use the transport registry with caching
@@ -164,7 +164,7 @@ func calculateRepositoryStats(source sources.SourceEntry) (*RepositoryStats, *ap
 	return stats, registry, nil
 }
 
-func outputStats(source sources.SourceEntry, stats *RepositoryStats, format string) error {
+func outputStats(source sources.Entry, stats *RepositoryStats, format string) error {
 	switch format {
 	case "json":
 		encoder := json.NewEncoder(os.Stdout)
@@ -286,7 +286,7 @@ func formatPrometheusMetric(name string, labels map[string]string, value float64
 	return sb.String()
 }
 
-func outputStatsPrometheus(source sources.SourceEntry, stats *RepositoryStats) error {
+func outputStatsPrometheus(source sources.Entry, stats *RepositoryStats) error {
 	purl, err := url.Parse(source.URI)
 	if err != nil {
 		return fmt.Errorf("failed to parse source.URI: %w", err)

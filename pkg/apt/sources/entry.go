@@ -1,12 +1,8 @@
 package sources
 
 import (
-	"bufio"
 	"fmt"
-	"io"
-	"iter"
 	"net/url"
-	"regexp"
 	"strings"
 )
 
@@ -18,11 +14,6 @@ const (
 	SourceTypeSrc     SourceType = "deb-src" // Source packages
 	SourceTypeUnknown SourceType = "unknown"
 )
-
-// List represents a collection of APT source entries
-type List struct {
-	Entries []Entry `json:"entries"`
-}
 
 // Entry represents a single APT source entry from sources.list
 type Entry struct {
@@ -41,171 +32,11 @@ type Entry struct {
 	// Options in square brackets (e.g., arch=amd64, trusted=yes)
 	Options map[string]string `json:"options,omitempty"`
 
-	// Whether this entry is enabled (true) or commented out (false)
-	Enabled bool `json:"enabled"`
-
 	// Original line text for reference
-	OriginalLine string `json:"original_line,omitempty"`
+	originalLine string
 
 	// Line number in the source file
 	LineNumber int `json:"line_number,omitempty"`
-}
-
-// ParseSources parses APT sources.list format and returns an iterator over source entries
-func ParseSources(r io.Reader) iter.Seq2[*Entry, error] {
-	return func(yield func(*Entry, error) bool) {
-		scanner := bufio.NewScanner(r)
-		lineNumber := 0
-
-		for scanner.Scan() {
-			lineNumber++
-			line := scanner.Text()
-
-			// Skip empty lines
-			if strings.TrimSpace(line) == "" {
-				continue
-			}
-
-			entry, err := parseSourceLine(line, lineNumber)
-			if err != nil {
-				yield(nil, fmt.Errorf("line %d: %w", lineNumber, err))
-				return
-			}
-
-			// Skip lines that are just comments
-			if entry == nil {
-				continue
-			}
-
-			if !yield(entry, nil) {
-				return // Stop iteration if yield returns false
-			}
-		}
-
-		if err := scanner.Err(); err != nil {
-			yield(nil, fmt.Errorf("scanner error: %w", err))
-		}
-	}
-}
-
-// ParseSourcesList parses an entire sources.list file into a List structure
-func ParseSourcesList(r io.Reader) (*List, error) {
-	var entries []Entry
-
-	for entry, err := range ParseSources(r) {
-		if err != nil {
-			return nil, err
-		}
-		entries = append(entries, *entry)
-	}
-
-	return &List{Entries: entries}, nil
-}
-
-// parseSourceLine parses a single line from sources.list
-func parseSourceLine(line string, lineNumber int) (*Entry, error) {
-	originalLine := line
-	line = strings.TrimSpace(line)
-
-	// Skip empty lines
-	if line == "" {
-		return nil, nil
-	}
-
-	// Check if line is commented out
-	enabled := true
-	if strings.HasPrefix(line, "#") {
-		enabled = false
-		line = strings.TrimSpace(line[1:]) // Remove # and trim
-
-		// If it's just a comment without source info, skip it
-		if line == "" || !isSourceLine(line) {
-			return nil, nil
-		}
-	}
-
-	// Parse options in square brackets (they come after the source type)
-	options := make(map[string]string)
-	optionsRegex := regexp.MustCompile(`^(\S+)\s+\[([^\]]+)\]\s*(.*)`)
-	if match := optionsRegex.FindStringSubmatch(line); match != nil {
-		// We have options: [type] [options] [rest]
-		sourceType := match[1]
-		optionsStr := match[2]
-		rest := match[3]
-		line = sourceType + " " + rest // Reconstruct without options
-
-		for _, opt := range strings.Fields(optionsStr) {
-			if parts := strings.SplitN(opt, "=", 2); len(parts) == 2 {
-				options[parts[0]] = parts[1]
-			} else {
-				options[opt] = "true" // Options without values are treated as boolean true
-			}
-		}
-	}
-
-	// Split remaining line into fields
-	fields := strings.Fields(line)
-	if len(fields) < 3 {
-		return &Entry{
-			Enabled:      enabled,
-			OriginalLine: originalLine,
-			LineNumber:   lineNumber,
-		}, fmt.Errorf("invalid source line format: expected at least 3 fields (type, uri, distribution)")
-	}
-
-	// Parse source type
-	sourceType := parseSourceType(fields[0])
-	if sourceType == SourceTypeUnknown {
-		return &Entry{
-			Enabled:      enabled,
-			OriginalLine: originalLine,
-			LineNumber:   lineNumber,
-		}, fmt.Errorf("unknown source type: %s", fields[0])
-	}
-
-	// Parse URI
-	uri := fields[1]
-	if err := validateURI(uri); err != nil {
-		return &Entry{
-			Type:         sourceType,
-			URI:          uri,
-			Enabled:      enabled,
-			OriginalLine: originalLine,
-			LineNumber:   lineNumber,
-		}, fmt.Errorf("invalid URI: %w", err)
-	}
-
-	// Parse distribution
-	distribution := fields[2]
-
-	// Parse components (remaining fields)
-	var components []string
-	if len(fields) > 3 {
-		components = fields[3:]
-	}
-
-	return &Entry{
-		Type:         sourceType,
-		URI:          uri,
-		Distribution: distribution,
-		Components:   components,
-		Options:      options,
-		Enabled:      enabled,
-		OriginalLine: originalLine,
-		LineNumber:   lineNumber,
-	}, nil
-}
-
-// parseSourceType converts string to SourceType
-func parseSourceType(typeStr string) SourceType {
-	switch strings.ToLower(typeStr) {
-	case "deb":
-		return SourceTypeDeb
-	case "deb-src":
-		return SourceTypeSrc
-	default:
-		return SourceTypeUnknown
-	}
 }
 
 // validateURI validates that the URI is well-formed
@@ -250,103 +81,4 @@ func isSourceLine(line string) bool {
 	}
 
 	return parseSourceType(firstField) != SourceTypeUnknown
-}
-
-// GetEnabledEntries returns only enabled source entries
-func (sl *List) GetEnabledEntries() []Entry {
-	var enabled []Entry
-	for _, entry := range sl.Entries {
-		if entry.Enabled {
-			enabled = append(enabled, entry)
-		}
-	}
-	return enabled
-}
-
-// GetDisabledEntries returns only disabled (commented out) source entries
-func (sl *List) GetDisabledEntries() []Entry {
-	var disabled []Entry
-	for _, entry := range sl.Entries {
-		if !entry.Enabled {
-			disabled = append(disabled, entry)
-		}
-	}
-	return disabled
-}
-
-// GetByType returns entries of a specific type (deb or deb-src)
-func (sl *List) GetByType(sourceType SourceType) []Entry {
-	var filtered []Entry
-	for _, entry := range sl.Entries {
-		if entry.Type == sourceType {
-			filtered = append(filtered, entry)
-		}
-	}
-	return filtered
-}
-
-// GetByURI returns entries matching a specific URI
-func (sl *List) GetByURI(uri string) []Entry {
-	var filtered []Entry
-	for _, entry := range sl.Entries {
-		if entry.URI == uri {
-			filtered = append(filtered, entry)
-		}
-	}
-	return filtered
-}
-
-// HasComponent checks if an entry contains a specific component
-func (se *Entry) HasComponent(component string) bool {
-	for _, comp := range se.Components {
-		if comp == component {
-			return true
-		}
-	}
-	return false
-}
-
-// GetOption returns the value of a specific option, with a default value if not found
-func (se *Entry) GetOption(key, defaultValue string) string {
-	if value, exists := se.Options[key]; exists {
-		return value
-	}
-	return defaultValue
-}
-
-// HasOption checks if an entry has a specific option set
-func (se *Entry) HasOption(key string) bool {
-	_, exists := se.Options[key]
-	return exists
-}
-
-// String returns a string representation of the source entry in sources.list format
-func (se *Entry) String() string {
-	var parts []string
-
-	// Add comment prefix if disabled
-	prefix := ""
-	if !se.Enabled {
-		prefix = "# "
-	}
-
-	// Add options if present
-	optionsStr := ""
-	if len(se.Options) > 0 {
-		var opts []string
-		for key, value := range se.Options {
-			if value == "true" {
-				opts = append(opts, key)
-			} else {
-				opts = append(opts, fmt.Sprintf("%s=%s", key, value))
-			}
-		}
-		optionsStr = fmt.Sprintf("[%s] ", strings.Join(opts, " "))
-	}
-
-	// Build the line
-	parts = append(parts, string(se.Type), se.URI, se.Distribution)
-	parts = append(parts, se.Components...)
-
-	return fmt.Sprintf("%s%s%s", prefix, optionsStr, strings.Join(parts, " "))
 }
