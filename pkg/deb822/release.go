@@ -19,11 +19,17 @@ type HashEntry struct {
 
 // FileInfo represents metadata about a file referenced in the Release file
 type FileInfo struct {
-	HashEntry
+	Path         string `json:"path"`         // File path relative to dists/distribution/
+	Size         int64  `json:"size"`         // File size in bytes
 	Type         string `json:"type"`         // "Packages", "Release", "Contents", etc.
 	Component    string `json:"component"`    // e.g., "main", "universe"
 	Architecture string `json:"architecture"` // e.g., "amd64", "all"
 	Compressed   bool   `json:"compressed"`   // true if file is gzipped
+
+	// Hash entries - all available hashes for this file
+	MD5    string `json:"md5,omitempty"`    // MD5 hash (legacy)
+	SHA1   string `json:"sha1,omitempty"`   // SHA1 hash (legacy)
+	SHA256 string `json:"sha256,omitempty"` // SHA256 hash (preferred)
 }
 
 // Release represents an APT Release file with all standardized fields
@@ -267,32 +273,47 @@ func (r *Release) Fields() []string {
 }
 
 // GetAvailableFiles returns a categorized list of files referenced in the Release file
+// Each FileInfo contains all available hash types for that file path
 func (r *Release) GetAvailableFiles() []FileInfo {
-	var files []FileInfo
+	// Use map to consolidate all hash types per file path
+	fileMap := make(map[string]*FileInfo)
 
-	// Process SHA256 entries (preferred)
+	// Process SHA256 entries
 	for _, entry := range r.SHA256 {
 		if fileInfo := parseFileInfo(entry); fileInfo != nil {
-			files = append(files, *fileInfo)
-		}
-	}
-
-	// If no SHA256 entries, fall back to SHA1
-	if len(files) == 0 {
-		for _, entry := range r.SHA1 {
-			if fileInfo := parseFileInfo(entry); fileInfo != nil {
-				files = append(files, *fileInfo)
+			if existing, exists := fileMap[entry.Path]; exists {
+				existing.SHA256 = entry.Hash
+			} else {
+				fileInfo.SHA256 = entry.Hash
+				fileMap[entry.Path] = fileInfo
 			}
 		}
 	}
 
-	// If no SHA1 entries, fall back to MD5Sum (legacy)
-	if len(files) == 0 {
-		for _, entry := range r.MD5Sum {
-			if fileInfo := parseFileInfo(entry); fileInfo != nil {
-				files = append(files, *fileInfo)
-			}
+	// Process SHA1 entries
+	for _, entry := range r.SHA1 {
+		if existing, exists := fileMap[entry.Path]; exists {
+			existing.SHA1 = entry.Hash
+		} else if fileInfo := parseFileInfo(entry); fileInfo != nil {
+			fileInfo.SHA1 = entry.Hash
+			fileMap[entry.Path] = fileInfo
 		}
+	}
+
+	// Process MD5Sum entries
+	for _, entry := range r.MD5Sum {
+		if existing, exists := fileMap[entry.Path]; exists {
+			existing.MD5 = entry.Hash
+		} else if fileInfo := parseFileInfo(entry); fileInfo != nil {
+			fileInfo.MD5 = entry.Hash
+			fileMap[entry.Path] = fileInfo
+		}
+	}
+
+	// Convert map to slice
+	files := make([]FileInfo, 0, len(fileMap))
+	for _, fileInfo := range fileMap {
+		files = append(files, *fileInfo)
 	}
 
 	return files
@@ -314,7 +335,8 @@ func (r *Release) GetPackagesFiles(component, architecture string) []FileInfo {
 // parseFileInfo extracts file metadata from a hash entry path
 func parseFileInfo(entry HashEntry) *FileInfo {
 	info := &FileInfo{
-		HashEntry:  entry,
+		Path:       entry.Path,
+		Size:       entry.Size,
 		Compressed: strings.HasSuffix(entry.Path, ".gz"),
 	}
 

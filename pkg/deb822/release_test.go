@@ -259,6 +259,58 @@ func TestReleaseJSONSerialization(t *testing.T) {
 	t.Logf("JSON output: %s", string(jsonData))
 }
 
+func TestFileInfoConsolidation(t *testing.T) {
+	// Test that FileInfo consolidates all hash types for the same file path
+	releaseFile, err := os.Open("testdata/spotify-release.gz")
+	require.NoError(t, err)
+	defer releaseFile.Close()
+
+	gz, err := gzip.NewReader(releaseFile)
+	require.NoError(t, err)
+	defer gz.Close()
+
+	release, err := ParseRelease(gz)
+	require.NoError(t, err)
+
+	// Get available files - should consolidate all hash types
+	files := release.GetAvailableFiles()
+
+	// Find a specific file that should have all three hash types
+	var packagesFile *FileInfo
+	for _, file := range files {
+		if file.Path == "non-free/binary-amd64/Packages" {
+			packagesFile = &file
+			break
+		}
+	}
+
+	require.NotNil(t, packagesFile, "Should find non-free/binary-amd64/Packages")
+
+	// Verify that all hash types are present for this file
+	assert.NotEmpty(t, packagesFile.MD5, "Should have MD5 hash")
+	assert.NotEmpty(t, packagesFile.SHA1, "Should have SHA1 hash")
+	assert.NotEmpty(t, packagesFile.SHA256, "Should have SHA256 hash")
+
+	// Verify the hash values have expected lengths
+	assert.Len(t, packagesFile.MD5, 32, "MD5 should be 32 characters")
+	assert.Len(t, packagesFile.SHA1, 40, "SHA1 should be 40 characters")
+	assert.Len(t, packagesFile.SHA256, 64, "SHA256 should be 64 characters")
+
+	// Verify other file metadata
+	assert.Equal(t, int64(4188), packagesFile.Size)
+	assert.Equal(t, "Packages", packagesFile.Type)
+	assert.Equal(t, "non-free", packagesFile.Component)
+	assert.Equal(t, "amd64", packagesFile.Architecture)
+	assert.False(t, packagesFile.Compressed)
+
+	// Verify that we have fewer FileInfo entries than total hash entries
+	// (because multiple hash types are consolidated per file)
+	totalHashEntries := len(release.MD5Sum) + len(release.SHA1) + len(release.SHA256)
+	assert.Less(t, len(files), totalHashEntries, "Should have fewer FileInfo entries than total hash entries due to consolidation")
+
+	t.Logf("Consolidated %d hash entries into %d FileInfo entries", totalHashEntries, len(files))
+}
+
 func TestAllReleaseFiles(t *testing.T) {
 	// Test that all release files in testdata can be parsed
 	testdataDir := "testdata"
