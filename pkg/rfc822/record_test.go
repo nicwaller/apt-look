@@ -13,12 +13,9 @@ Value: 1.0.0`
 
 	parser := NewParser()
 
-	var record Record
-	for r, err := range parser.ParseRecords(strings.NewReader(input)) {
-		require.NoError(t, err)
-		record = r
-		break
-	}
+	record, err := parser.ParseHeader(strings.NewReader(input))
+	require.NoError(t, err)
+	require.NotEmpty(t, record, "No header found")
 
 	// Test Lookup method
 	field, exists := record.Lookup("Name")

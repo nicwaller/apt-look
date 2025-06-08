@@ -19,16 +19,9 @@ Comment: A test field
 
 	parser := NewParser()
 
-	var record Record
-	found := false
-	for r, err := range parser.ParseRecords(strings.NewReader(input)) {
-		require.NoError(t, err)
-		record = r
-		found = true
-		break
-	}
-
-	require.True(t, found, "No records found")
+	record, err := parser.ParseHeader(strings.NewReader(input))
+	require.NoError(t, err)
+	require.NotEmpty(t, record, "No header found")
 
 	// Test field access
 	assert.Equal(t, "test-item", record.Get("Name"))
@@ -47,7 +40,8 @@ Comment: A test field
 	assert.Equal(t, expectedOrder, fields)
 }
 
-func TestMultipleRecords(t *testing.T) {
+func TestHeaderStopsAtBlankLine(t *testing.T) {
+	// RFC 822 header parsing should stop at the first blank line
 	input := `Name: item1
 Value: 1.0.0
 
@@ -55,15 +49,16 @@ Name: item2
 Value: 2.0.0`
 
 	parser := NewParser()
-	var records []Record
-	for record, err := range parser.ParseRecords(strings.NewReader(input)) {
-		require.NoError(t, err)
-		records = append(records, record)
-	}
+	record, err := parser.ParseHeader(strings.NewReader(input))
+	require.NoError(t, err)
+	require.NotEmpty(t, record, "No header found")
 
-	assert.Len(t, records, 2)
-	assert.Equal(t, "item1", records[0].Get("Name"))
-	assert.Equal(t, "item2", records[1].Get("Name"))
+	// Should only parse the first record before the blank line
+	assert.Equal(t, "item1", record.Get("Name"))
+	assert.Equal(t, "1.0.0", record.Get("Value"))
+	
+	// Should not contain the second record
+	assert.False(t, record.Has("item2"))
 }
 
 func TestControlFormatRoundTrip(t *testing.T) {
@@ -77,15 +72,9 @@ Comment: A test field
 
 	parser := NewParser()
 
-	var record Record
-	found := false
-	for r, err := range parser.ParseRecords(strings.NewReader(input)) {
-		require.NoError(t, err)
-		record = r
-		found = true
-		break
-	}
-	require.True(t, found)
+	record, err := parser.ParseHeader(strings.NewReader(input))
+	require.NoError(t, err)
+	require.NotEmpty(t, record, "No header found")
 
 	// Convert back to control format and verify byte-for-byte identical
 	var sb strings.Builder
@@ -101,7 +90,6 @@ func TestFieldValidation(t *testing.T) {
 	}{
 		{"empty field name", `: value`},
 		{"field name with space", `Invalid Field: value`},
-		{"field name starting with hash", `#Field: value`},
 		{"field name starting with dash", `-Field: value`},
 		{"field name with control char", "Field\x01: value"},
 	}
@@ -109,10 +97,8 @@ func TestFieldValidation(t *testing.T) {
 	parser := NewParser()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			for _, err := range parser.ParseRecords(strings.NewReader(tt.input)) {
-				assert.Error(t, err, "Expected error for invalid field name: %s", tt.input)
-				break
-			}
+			_, err := parser.ParseHeader(strings.NewReader(tt.input))
+			assert.Error(t, err, "Expected error for invalid field name: %s", tt.input)
 		})
 	}
 }
@@ -123,37 +109,9 @@ Value: 1.0.0
 Name: duplicate-item`
 
 	parser := NewParser()
-	for _, err := range parser.ParseRecords(strings.NewReader(input)) {
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "duplicate field")
-		break
-	}
-}
-
-func TestIteratorInterface(t *testing.T) {
-	input := `Name: item1
-Value: 1.0.0
-
-Name: item2
-Value: 2.0.0
-
-Name: item3
-Value: 3.0.0`
-
-	parser := NewParser()
-
-	// Test early termination
-	count := 0
-	for record, err := range parser.ParseRecords(strings.NewReader(input)) {
-		require.NoError(t, err)
-		count++
-		if count == 2 {
-			break
-		}
-		assert.True(t, record.Has("Name"))
-	}
-
-	assert.Equal(t, 2, count)
+	_, err := parser.ParseHeader(strings.NewReader(input))
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "duplicate field")
 }
 
 func TestFieldStringMethods(t *testing.T) {

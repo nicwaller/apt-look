@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"iter"
 	"regexp"
 	"strings"
 )
@@ -17,19 +16,10 @@ func NewParser() *Parser {
 	return &Parser{}
 }
 
-// ParseRecords returns an iterator over records from an RFC822-style message
-func (p *Parser) ParseRecords(r io.Reader) iter.Seq2[Record, error] {
-	return func(yield func(Record, error) bool) {
-		if err := p.parseRecords(r, yield); err != nil {
-			yield(nil, err)
-		}
-	}
-}
-
-// parseRecords contains the actual parsing logic
-func (p *Parser) parseRecords(r io.Reader, yield func(Record, error) bool) error {
+// ParseHeader parses a single RFC822 header section and returns it as a Record
+func (p *Parser) ParseHeader(r io.Reader) (Record, error) {
 	scanner := bufio.NewScanner(r)
-	var currentRecord Record
+	var record Record
 	var currentField string
 	var currentValue strings.Builder
 
@@ -37,24 +27,13 @@ func (p *Parser) parseRecords(r io.Reader, yield func(Record, error) bool) error
 		if currentField != "" {
 			value := strings.TrimSpace(currentValue.String())
 			lines := strings.Split(value, "\n")
-			currentRecord = append(currentRecord, Field{
+			record = append(record, Field{
 				Name:  currentField,
 				Value: lines,
 			})
 			currentField = ""
 			currentValue.Reset()
 		}
-	}
-
-	flushCurrentRecord := func() bool {
-		flushCurrentField()
-		if len(currentRecord) > 0 {
-			if !yield(currentRecord, nil) {
-				return false // Stop iteration if yield returns false
-			}
-			currentRecord = Record{}
-		}
-		return true
 	}
 
 	for scanner.Scan() {
@@ -67,18 +46,15 @@ func (p *Parser) parseRecords(r io.Reader, yield func(Record, error) bool) error
 			continue
 		}
 
-		// Empty line indicates end of record
+		// Empty line indicates end of header section
 		if strings.TrimSpace(line) == "" {
-			if !flushCurrentRecord() {
-				return nil // Stop iteration if yield returned false
-			}
-			continue
+			break
 		}
 
 		// Continuation line (starts with space or tab)
 		if len(line) > 0 && (line[0] == ' ' || line[0] == '\t') {
 			if currentField == "" {
-				return fmt.Errorf("continuation line without field: %q", line)
+				return nil, fmt.Errorf("continuation line without field: %q", line)
 			}
 			// Remove leading whitespace and add to current value
 			currentValue.WriteString("\n")
@@ -89,7 +65,7 @@ func (p *Parser) parseRecords(r io.Reader, yield func(Record, error) bool) error
 		// New field line
 		parts := strings.SplitN(line, ":", 2)
 		if len(parts) != 2 {
-			return fmt.Errorf("invalid field line: %q", line)
+			return nil, fmt.Errorf("invalid field line: %q", line)
 		}
 
 		// Flush previous field
@@ -98,12 +74,12 @@ func (p *Parser) parseRecords(r io.Reader, yield func(Record, error) bool) error
 		// Validate field name
 		fieldName := strings.TrimSpace(parts[0])
 		if err := p.validateFieldName(fieldName); err != nil {
-			return fmt.Errorf("invalid field name %q: %w", fieldName, err)
+			return nil, fmt.Errorf("invalid field name %q: %w", fieldName, err)
 		}
 
 		// Check for duplicate field in current record
-		if currentRecord.Has(fieldName) {
-			return fmt.Errorf("duplicate field %q in record", fieldName)
+		if record.Has(fieldName) {
+			return nil, fmt.Errorf("duplicate field %q in record", fieldName)
 		}
 
 		currentField = fieldName
@@ -111,15 +87,16 @@ func (p *Parser) parseRecords(r io.Reader, yield func(Record, error) bool) error
 		currentValue.WriteString(value)
 	}
 
-	// Flush any remaining field and record
-	flushCurrentRecord()
+	// Flush any remaining field
+	flushCurrentField()
 
 	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("scanner error: %w", err)
+		return nil, fmt.Errorf("scanner error: %w", err)
 	}
 
-	return nil
+	return record, nil
 }
+
 
 // validateFieldName checks if a field name is valid according to RFC822 rules
 func (p *Parser) validateFieldName(name string) error {

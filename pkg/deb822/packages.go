@@ -76,10 +76,8 @@ type Package struct {
 
 // ParsePackages parses an APT Packages file and returns an iterator over Package entries
 func ParsePackages(r io.Reader) iter.Seq2[*Package, error] {
-	parser := rfc822.NewParser()
-
 	return func(yield func(*Package, error) bool) {
-		for record, err := range parser.ParseRecords(r) {
+		for record, err := range ParseRecords(r) {
 			if err != nil {
 				yield(nil, fmt.Errorf("parsing packages file: %w", err))
 				return

@@ -52,20 +52,13 @@ type Release struct {
 // ParseRelease parses an APT Release file from the given reader
 func ParseRelease(r io.Reader) (*Release, error) {
 	parser := rfc822.NewParser()
-
-	var record rfc822.Record
-	found := false
-	for rec, err := range parser.ParseRecords(r) {
-		if err != nil {
-			return nil, fmt.Errorf("parsing release file: %w", err)
-		}
-		record = rec
-		found = true
-		break // Release files contain only one record
+	record, err := parser.ParseHeader(r)
+	if err != nil {
+		return nil, fmt.Errorf("parsing release file: %w", err)
 	}
 
-	if !found {
-		return nil, fmt.Errorf("no records found in release file")
+	if len(record) == 0 {
+		return nil, fmt.Errorf("no header found in release file")
 	}
 
 	release := &Release{record: record}
