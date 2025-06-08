@@ -5,58 +5,41 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"iter"
 	"regexp"
 	"strings"
 )
 
-// ParseSources parses APT sources.list format and returns an iterator over source entries
-func ParseSources(r io.Reader) iter.Seq2[*Entry, error] {
-	return func(yield func(*Entry, error) bool) {
-		scanner := bufio.NewScanner(r)
-		lineNumber := 0
-
-		for scanner.Scan() {
-			lineNumber++
-			line := scanner.Text()
-			line = strings.TrimSpace(line)
-
-			// Skip empty lines
-			if line == "" {
-				continue
-			}
-
-			// Skip commented lines
-			if strings.HasPrefix(line, "#") {
-				continue
-			}
-
-			entry, err := parseSourceLine(line, lineNumber)
-			if err != nil {
-				yield(nil, fmt.Errorf("line %d: %w", lineNumber, err))
-				return
-			}
-
-			if !yield(entry, nil) {
-				return // Stop iteration if yield returns false
-			}
-		}
-
-		if err := scanner.Err(); err != nil {
-			yield(nil, fmt.Errorf("scanner error: %w", err))
-		}
-	}
-}
-
-// ParseSourcesList parses an entire sources.list file into a List structure
+// ParseSourcesList parses an entire sources.list file into a slice of entries
 func ParseSourcesList(r io.Reader) ([]Entry, error) {
 	var entries []Entry
+	scanner := bufio.NewScanner(r)
+	lineNumber := 0
 
-	for entry, err := range ParseSources(r) {
-		if err != nil {
-			return nil, err
+	for scanner.Scan() {
+		lineNumber++
+		line := scanner.Text()
+		line = strings.TrimSpace(line)
+
+		// Skip empty lines
+		if line == "" {
+			continue
 		}
+
+		// Skip commented lines
+		if strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		entry, err := parseSourceLine(line, lineNumber)
+		if err != nil {
+			return nil, fmt.Errorf("line %d: %w", lineNumber, err)
+		}
+
 		entries = append(entries, *entry)
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("scanner error: %w", err)
 	}
 
 	return entries, nil

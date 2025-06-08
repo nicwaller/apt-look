@@ -107,16 +107,16 @@ func TestParseSourceLine(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := parseSourceLine(tt.line, tt.lineNumber)
-			
+
 			if (err != nil) != tt.wantErr {
 				t.Errorf("parseSourceLine() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			
+
 			if tt.wantErr {
 				return
 			}
-			
+
 			if got.Type != tt.expected.Type {
 				t.Errorf("parseSourceLine() Type = %v, want %v", got.Type, tt.expected.Type)
 			}
@@ -226,38 +226,226 @@ deb https://deb.debian.org/debian bookworm main`
 	}
 }
 
-func TestParseSources(t *testing.T) {
+func TestParseSourcesListErrors(t *testing.T) {
 	input := `deb http://archive.ubuntu.com/ubuntu jammy main
 invalid line without proper format
 deb-src http://archive.ubuntu.com/ubuntu jammy main`
 
-	reader := strings.NewReader(input)
-	entries := make([]*Entry, 0)
-	var errors []error
+	_, err := ParseSourcesList(strings.NewReader(input))
+	if err == nil {
+		t.Errorf("ParseSourcesList() expected error for invalid line, got nil")
+	}
+}
 
-	for entry, err := range ParseSources(reader) {
-		if err != nil {
-			errors = append(errors, err)
+func TestParseDeb822Sources(t *testing.T) {
+	input := `Types: deb deb-src
+URIs: https://deb.debian.org/debian
+Suites: bookworm bookworm-updates
+Components: main non-free-firmware
+Enabled: yes
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+
+Types: deb deb-src
+URIs: https://security.debian.org/debian-security
+Suites: bookworm-security
+Components: main non-free-firmware
+Enabled: yes
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg`
+
+	// The parser generates entries in order: types x uris x suites
+	// So for "Types: deb deb-src", "URIs: debian", "Suites: bookworm bookworm-updates"
+	// We get: deb+debian+bookworm, deb-src+debian+bookworm, deb+debian+bookworm-updates, deb-src+debian+bookworm-updates
+	expected := []Entry{
+		// First record - Types: deb deb-src, Suites: bookworm bookworm-updates
+		{
+			Type:         SourceTypeDeb,
+			URI:          "https://deb.debian.org/debian",
+			Distribution: "bookworm",
+			Components:   []string{"main", "non-free-firmware"},
+			Options: map[string]string{
+				"enabled":   "yes",
+				"signed-by": "/usr/share/keyrings/debian-archive-keyring.gpg",
+			},
+			LineNumber: 1,
+		},
+		{
+			Type:         SourceTypeDeb,
+			URI:          "https://deb.debian.org/debian",
+			Distribution: "bookworm-updates",
+			Components:   []string{"main", "non-free-firmware"},
+			Options: map[string]string{
+				"enabled":   "yes",
+				"signed-by": "/usr/share/keyrings/debian-archive-keyring.gpg",
+			},
+			LineNumber: 1,
+		},
+		{
+			Type:         SourceTypeSrc,
+			URI:          "https://deb.debian.org/debian",
+			Distribution: "bookworm",
+			Components:   []string{"main", "non-free-firmware"},
+			Options: map[string]string{
+				"enabled":   "yes",
+				"signed-by": "/usr/share/keyrings/debian-archive-keyring.gpg",
+			},
+			LineNumber: 1,
+		},
+		{
+			Type:         SourceTypeSrc,
+			URI:          "https://deb.debian.org/debian",
+			Distribution: "bookworm-updates",
+			Components:   []string{"main", "non-free-firmware"},
+			Options: map[string]string{
+				"enabled":   "yes",
+				"signed-by": "/usr/share/keyrings/debian-archive-keyring.gpg",
+			},
+			LineNumber: 1,
+		},
+		// Second record - Types: deb deb-src, Suites: bookworm-security
+		{
+			Type:         SourceTypeDeb,
+			URI:          "https://security.debian.org/debian-security",
+			Distribution: "bookworm-security",
+			Components:   []string{"main", "non-free-firmware"},
+			Options: map[string]string{
+				"enabled":   "yes",
+				"signed-by": "/usr/share/keyrings/debian-archive-keyring.gpg",
+			},
+			LineNumber: 2,
+		},
+		{
+			Type:         SourceTypeSrc,
+			URI:          "https://security.debian.org/debian-security",
+			Distribution: "bookworm-security",
+			Components:   []string{"main", "non-free-firmware"},
+			Options: map[string]string{
+				"enabled":   "yes",
+				"signed-by": "/usr/share/keyrings/debian-archive-keyring.gpg",
+			},
+			LineNumber: 2,
+		},
+	}
+
+	got, err := ParseDeb822SourcesList(strings.NewReader(input))
+	if err != nil {
+		t.Fatalf("ParseDeb822SourcesList() error = %v", err)
+	}
+
+	if len(got) != len(expected) {
+		t.Fatalf("ParseDeb822SourcesList() returned %d entries, want %d", len(got), len(expected))
+	}
+
+	for i, entry := range got {
+		exp := expected[i]
+		if entry.Type != exp.Type {
+			t.Errorf("Entry[%d] Type = %v, want %v", i, entry.Type, exp.Type)
+		}
+		if entry.URI != exp.URI {
+			t.Errorf("Entry[%d] URI = %v, want %v", i, entry.URI, exp.URI)
+		}
+		if entry.Distribution != exp.Distribution {
+			t.Errorf("Entry[%d] Distribution = %v, want %v", i, entry.Distribution, exp.Distribution)
+		}
+		if len(entry.Components) != len(exp.Components) {
+			t.Errorf("Entry[%d] Components length = %v, want %v", i, len(entry.Components), len(exp.Components))
 		} else {
-			entries = append(entries, entry)
+			for j, comp := range entry.Components {
+				if comp != exp.Components[j] {
+					t.Errorf("Entry[%d] Components[%d] = %v, want %v", i, j, comp, exp.Components[j])
+				}
+			}
+		}
+		if len(entry.Options) != len(exp.Options) {
+			t.Errorf("Entry[%d] Options length = %v, want %v", i, len(entry.Options), len(exp.Options))
+		} else {
+			for key, value := range exp.Options {
+				if entry.Options[key] != value {
+					t.Errorf("Entry[%d] Options[%s] = %v, want %v", i, key, entry.Options[key], value)
+				}
+			}
+		}
+		if entry.LineNumber != exp.LineNumber {
+			t.Errorf("Entry[%d] LineNumber = %v, want %v", i, entry.LineNumber, exp.LineNumber)
 		}
 	}
+}
 
-	if len(errors) != 1 {
-		t.Errorf("ParseSources() expected 1 error, got %d", len(errors))
+func TestParseDeb822SourcesWithMultipleURIs(t *testing.T) {
+	input := `Types: deb
+URIs: https://deb.debian.org/debian https://mirror.example.com/debian
+Suites: bookworm
+Components: main`
+
+	got, err := ParseDeb822SourcesList(strings.NewReader(input))
+	if err != nil {
+		t.Fatalf("ParseDeb822SourcesList() error = %v", err)
 	}
 
-	if len(entries) != 1 {
-		t.Errorf("ParseSources() expected 1 valid entry, got %d", len(entries))
+	if len(got) != 2 {
+		t.Fatalf("ParseDeb822SourcesList() returned %d entries, want 2", len(got))
 	}
 
-	if len(entries) > 0 {
-		entry := entries[0]
+	expectedURIs := []string{
+		"https://deb.debian.org/debian",
+		"https://mirror.example.com/debian",
+	}
+
+	for i, entry := range got {
+		if entry.URI != expectedURIs[i] {
+			t.Errorf("Entry[%d] URI = %v, want %v", i, entry.URI, expectedURIs[i])
+		}
 		if entry.Type != SourceTypeDeb {
-			t.Errorf("ParseSources() first entry Type = %v, want %v", entry.Type, SourceTypeDeb)
+			t.Errorf("Entry[%d] Type = %v, want %v", i, entry.Type, SourceTypeDeb)
 		}
-		if entry.URI != "http://archive.ubuntu.com/ubuntu" {
-			t.Errorf("ParseSources() first entry URI = %v, want http://archive.ubuntu.com/ubuntu", entry.URI)
+		if entry.Distribution != "bookworm" {
+			t.Errorf("Entry[%d] Distribution = %v, want bookworm", i, entry.Distribution)
 		}
+	}
+}
+
+func TestParseDeb822SourcesErrors(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr string
+	}{
+		{
+			name: "missing Types field",
+			input: `URIs: https://deb.debian.org/debian
+Suites: bookworm`,
+			wantErr: "missing required field 'Types'",
+		},
+		{
+			name: "missing URIs field",
+			input: `Types: deb
+Suites: bookworm`,
+			wantErr: "missing required field 'URIs'",
+		},
+		{
+			name: "missing Suites field",
+			input: `Types: deb
+URIs: https://deb.debian.org/debian`,
+			wantErr: "missing required field 'Suites'",
+		},
+		{
+			name: "unknown source type",
+			input: `Types: rpm
+URIs: https://example.com/repo
+Suites: stable`,
+			wantErr: "unknown source type: rpm",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := ParseDeb822SourcesList(strings.NewReader(tt.input))
+			if err == nil {
+				t.Errorf("ParseDeb822SourcesList() expected error, got nil")
+				return
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("ParseDeb822SourcesList() error = %v, want error containing %v", err, tt.wantErr)
+			}
+		})
 	}
 }
