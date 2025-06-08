@@ -14,7 +14,7 @@ import (
 
 func TestParseReleaseBasic(t *testing.T) {
 	// Test with Spotify release file
-	releaseFile, err := os.Open("../rfc822/testdata/spotify-release.gz")
+	releaseFile, err := os.Open("testdata/spotify-release.gz")
 	require.NoError(t, err)
 	defer releaseFile.Close()
 
@@ -64,7 +64,7 @@ func TestParseReleaseBasic(t *testing.T) {
 
 func TestParseReleaseDocker(t *testing.T) {
 	// Test with Docker release file (more complex)
-	releaseFile, err := os.Open("../rfc822/testdata/docker-release.gz")
+	releaseFile, err := os.Open("testdata/docker-release.gz")
 	require.NoError(t, err)
 	defer releaseFile.Close()
 
@@ -181,7 +181,7 @@ func TestParseBoolField(t *testing.T) {
 
 func TestReleaseFieldAccess(t *testing.T) {
 	// Test field access methods
-	releaseFile, err := os.Open("../rfc822/testdata/spotify-release.gz")
+	releaseFile, err := os.Open("testdata/spotify-release.gz")
 	require.NoError(t, err)
 	defer releaseFile.Close()
 
@@ -210,7 +210,7 @@ func TestReleaseFieldAccess(t *testing.T) {
 
 func TestReleaseJSONSerialization(t *testing.T) {
 	// Test JSON marshaling/unmarshaling
-	releaseFile, err := os.Open("../rfc822/testdata/spotify-release.gz")
+	releaseFile, err := os.Open("testdata/spotify-release.gz")
 	require.NoError(t, err)
 	defer releaseFile.Close()
 
@@ -261,7 +261,7 @@ func TestReleaseJSONSerialization(t *testing.T) {
 
 func TestAllReleaseFiles(t *testing.T) {
 	// Test that all release files in testdata can be parsed
-	testdataDir := "../rfc822/testdata"
+	testdataDir := "testdata"
 	files, err := filepath.Glob(filepath.Join(testdataDir, "*-release.gz"))
 	require.NoError(t, err)
 	require.NotEmpty(t, files)

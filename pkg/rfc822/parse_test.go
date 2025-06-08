@@ -1,16 +1,13 @@
 package rfc822
 
 import (
-	"compress/gzip"
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"path/filepath"
 )
 
 func TestParseSimpleRecord(t *testing.T) {
@@ -216,116 +213,3 @@ func TestFieldStringMethods(t *testing.T) {
 	assert.Equal(t, expectedMultilineString, multilineField.String())
 }
 
-func TestRealWorldFixtures(t *testing.T) {
-	fixtures := []struct {
-		name                string
-		releaseFile         string
-		packagesFile        string
-		expectedRecordCount int
-	}{
-		{
-			name:                "Spotify",
-			releaseFile:         "spotify-release.gz",
-			packagesFile:        "spotify-packages.gz",
-			expectedRecordCount: 4,
-		},
-	}
-
-	parser := NewParser()
-
-	for _, fixture := range fixtures {
-		t.Run(fixture.name, func(t *testing.T) {
-			// Test Release file - just verify it parses without errors
-			releaseFile, err := os.Open("testdata/" + fixture.releaseFile)
-			require.NoError(t, err)
-			defer releaseFile.Close()
-
-			gz, err := gzip.NewReader(releaseFile)
-			require.NoError(t, err)
-			defer gz.Close()
-
-			var release Record
-			found := false
-			for r, err := range parser.ParseRecords(gz) {
-				require.NoError(t, err)
-				release = r
-				found = true
-				break
-			}
-			require.True(t, found)
-			require.NotEmpty(t, release, "Release record should not be empty")
-
-			// Test Packages file
-			packagesFile, err := os.Open("testdata/" + fixture.packagesFile)
-			require.NoError(t, err)
-			defer packagesFile.Close()
-
-			pgz, err := gzip.NewReader(packagesFile)
-			require.NoError(t, err)
-			defer pgz.Close()
-
-			var records []Record
-			for record, err := range parser.ParseRecords(pgz) {
-				require.NoError(t, err)
-				records = append(records, record)
-			}
-
-			// Verify expected record count
-			assert.Len(t, records, fixture.expectedRecordCount)
-
-			// Verify all records have at least one field
-			for i, record := range records {
-				assert.True(t, len(record) > 0, "%s record %d: empty record", fixture.name, i)
-			}
-
-			t.Logf("%s: parsed %d records successfully", fixture.name, len(records))
-		})
-	}
-}
-
-func TestAllTestdataFiles(t *testing.T) {
-	// Get all .gz files in testdata directory
-	testdataDir := "testdata"
-	files, err := filepath.Glob(filepath.Join(testdataDir, "*.gz"))
-	require.NoError(t, err, "Failed to read testdata directory")
-	require.NotEmpty(t, files, "No test files found in testdata directory")
-
-	parser := NewParser()
-
-	for _, filePath := range files {
-		fileName := filepath.Base(filePath)
-		t.Run(fileName, func(t *testing.T) {
-			file, err := os.Open(filePath)
-			require.NoError(t, err, "Failed to open %s", fileName)
-			defer file.Close()
-
-			gz, err := gzip.NewReader(file)
-			require.NoError(t, err, "Failed to create gzip reader for %s", fileName)
-			defer gz.Close()
-
-			var recordCount int
-
-			for record, err := range parser.ParseRecords(gz) {
-				require.NoError(t, err, "Failed to parse record %d in %s", recordCount+1, fileName)
-				require.NotEmpty(t, record, "Empty record %d in %s", recordCount+1, fileName)
-
-				recordCount++
-
-				// Verify each record has at least one field
-				assert.True(t, len(record) > 0, "Record %d in %s has no fields", recordCount, fileName)
-
-				// Verify all field names are non-empty
-				for _, field := range record {
-					assert.NotEmpty(t, field.Name, "Empty field name in record %d of %s", recordCount, fileName)
-					// Verify field values are properly structured
-					assert.NotNil(t, field.Value, "Field %s in record %d has nil value", field.Name, recordCount)
-				}
-			}
-
-			require.Greater(t, recordCount, 0, "No records found in %s", fileName)
-			t.Logf("%s: parsed %d RFC822-style record(s) successfully", fileName, recordCount)
-		})
-	}
-
-	t.Logf("Successfully tested %d testdata files", len(files))
-}

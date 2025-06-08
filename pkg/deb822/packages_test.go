@@ -14,7 +14,7 @@ import (
 
 func TestParsePackagesBasic(t *testing.T) {
 	// Test with Spotify packages file
-	packagesFile, err := os.Open("../rfc822/testdata/spotify-packages.gz")
+	packagesFile, err := os.Open("testdata/spotify-packages.gz")
 	require.NoError(t, err)
 	defer packagesFile.Close()
 
@@ -59,7 +59,7 @@ func TestParsePackagesBasic(t *testing.T) {
 
 func TestParsePackagesDocker(t *testing.T) {
 	// Test with Docker packages file (more complex)
-	packagesFile, err := os.Open("../rfc822/testdata/docker-packages.gz")
+	packagesFile, err := os.Open("testdata/docker-packages.gz")
 	require.NoError(t, err)
 	defer packagesFile.Close()
 
@@ -101,7 +101,7 @@ func TestParsePackagesDocker(t *testing.T) {
 
 func TestParsePackagesMicrosoft(t *testing.T) {
 	// Test with Microsoft packages file
-	packagesFile, err := os.Open("../rfc822/testdata/microsoft-packages.gz")
+	packagesFile, err := os.Open("testdata/microsoft-packages.gz")
 	require.NoError(t, err)
 	defer packagesFile.Close()
 
@@ -270,7 +270,7 @@ Provides: virtual-package`
 
 func TestPackageJSONSerialization(t *testing.T) {
 	// Test JSON marshaling/unmarshaling
-	packagesFile, err := os.Open("../rfc822/testdata/spotify-packages.gz")
+	packagesFile, err := os.Open("testdata/spotify-packages.gz")
 	require.NoError(t, err)
 	defer packagesFile.Close()
 
@@ -323,7 +323,7 @@ func TestPackageJSONSerialization(t *testing.T) {
 
 func TestPackageFieldAccess(t *testing.T) {
 	// Test field access methods
-	packagesFile, err := os.Open("../rfc822/testdata/spotify-packages.gz")
+	packagesFile, err := os.Open("testdata/spotify-packages.gz")
 	require.NoError(t, err)
 	defer packagesFile.Close()
 
@@ -358,7 +358,7 @@ func TestPackageFieldAccess(t *testing.T) {
 
 func TestAllPackagesFiles(t *testing.T) {
 	// Test that all packages files in testdata can be parsed
-	testdataDir := "../rfc822/testdata"
+	testdataDir := "testdata"
 	files, err := filepath.Glob(filepath.Join(testdataDir, "*-packages.gz"))
 	require.NoError(t, err)
 	require.NotEmpty(t, files)
