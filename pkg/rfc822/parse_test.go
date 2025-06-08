@@ -56,7 +56,7 @@ Value: 2.0.0`
 	// Should only parse the first header before the blank line
 	assert.Equal(t, "item1", header.Get("Name"))
 	assert.Equal(t, "1.0.0", header.Get("Value"))
-	
+
 	// Should not contain the second header
 	assert.False(t, header.Has("item2"))
 }
@@ -142,4 +142,3 @@ Value: 1.0.0`
 	assert.Equal(t, "test-package", header.Get("Name"))
 	assert.Equal(t, "1.0.0", header.Get("Value"))
 }
-

@@ -44,11 +44,11 @@ type CheckResult struct {
 // FileCheckResult represents the result of checking a single file
 type FileCheckResult struct {
 	deb822.FileInfo
-	URL           string `json:"url"`
-	StatusCode    int    `json:"status_code,omitempty"`
-	Error         string `json:"error,omitempty"`
-	ActualSize    int64  `json:"actual_size,omitempty"`
-	SizeMatches   bool   `json:"size_matches,omitempty"`
+	URL         string `json:"url"`
+	StatusCode  int    `json:"status_code,omitempty"`
+	Error       string `json:"error,omitempty"`
+	ActualSize  int64  `json:"actual_size,omitempty"`
+	SizeMatches bool   `json:"size_matches,omitempty"`
 }
 
 func runCheck(sourceStr, format string) error {

@@ -7,10 +7,10 @@ import (
 
 // Registry manages multiple transport implementations with optional caching
 type Registry struct {
-	transports     map[string]Transport
+	transports       map[string]Transport
 	cachedTransports map[string]*CacheTransport
-	cacheConfig    CacheConfig
-	mu             sync.RWMutex
+	cacheConfig      CacheConfig
+	mu               sync.RWMutex
 }
 
 // NewRegistry creates a new transport registry
@@ -47,7 +47,7 @@ func (r *Registry) Acquire(ctx context.Context, req *AcquireRequest) (*AcquireRe
 	r.mu.RLock()
 	transport, exists := r.transports[req.URI.Scheme]
 	r.mu.RUnlock()
-	
+
 	if !exists {
 		return nil, &UnsupportedSchemeError{Scheme: req.URI.Scheme}
 	}

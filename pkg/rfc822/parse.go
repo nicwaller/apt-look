@@ -97,7 +97,6 @@ func (p *Parser) ParseHeader(r io.Reader) (Header, error) {
 	return header, nil
 }
 
-
 // validateFieldName checks if a field name is valid according to RFC822 rules
 func (p *Parser) validateFieldName(name string) error {
 	// Field names must not be empty

@@ -89,8 +89,8 @@ Version: 2.0.0`,
 			},
 		},
 		{
-			name: "empty input",
-			input: "",
+			name:     "empty input",
+			input:    "",
 			expected: []map[string]string{},
 		},
 		{

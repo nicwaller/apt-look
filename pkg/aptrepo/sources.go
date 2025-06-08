@@ -26,7 +26,7 @@ type SourceEntry struct {
 
 	// Repository URI
 	URI string `json:"uri"`
-	
+
 	// Distribution/Suite (e.g., "stable", "jammy", "bookworm")
 	Distribution string `json:"distribution"`
 
