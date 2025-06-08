@@ -1,13 +1,15 @@
 # aptrepo
 
-This package provides Go types and parsers for APT repository metadata files, including Release files that describe repository structure and Packages files that contain package metadata.
+This package provides Go types and parsers for APT repository metadata files, including Release files that describe repository structure, Packages files that contain package metadata, and sources.list files that define repository configurations.
 
 ## Features
 
 - **Release File Parsing**: Complete support for APT Release files with all standardized fields
 - **Packages File Parsing**: Full support for APT Packages files with comprehensive package metadata
+- **Sources.list Parsing**: Complete parser for APT sources.list format with options support
 - **Hash Verification**: Parse and access MD5Sum, SHA1, and SHA256 hash entries for repository integrity
 - **Dependency Parsing**: Extract and structure package dependency relationships
+- **Options Handling**: Full support for APT source options (arch, trusted, signed-by, etc.)
 - **Flexible Date Handling**: Robust parsing of various date formats found in real-world repositories
 - **JSON Serialization**: Built-in JSON support for structured output and API integration
 - **Type Safety**: Structured Go types for all APT metadata with proper validation
@@ -93,6 +95,52 @@ func main() {
 }
 ```
 
+### Sources.list Files
+
+```go
+package main
+
+import (
+    "fmt"
+    "os"
+    
+    "github.com/nicwaller/apt-look/pkg/aptrepo"
+)
+
+func main() {
+    file, err := os.Open("/etc/apt/sources.list")
+    if err != nil {
+        panic(err)
+    }
+    defer file.Close()
+    
+    sourcesList, err := aptrepo.ParseSourcesList(file)
+    if err != nil {
+        panic(err)
+    }
+    
+    fmt.Printf("Found %d source entries\n", len(sourcesList.Entries))
+    
+    // Show enabled entries
+    enabled := sourcesList.GetEnabledEntries()
+    fmt.Printf("Enabled entries: %d\n", len(enabled))
+    
+    for _, entry := range enabled {
+        fmt.Printf("Type: %s\n", entry.Type)
+        fmt.Printf("URI: %s\n", entry.URI)
+        fmt.Printf("Distribution: %s\n", entry.Distribution)
+        fmt.Printf("Components: %v\n", entry.Components)
+        
+        // Check for options
+        if arch := entry.GetOption("arch", ""); arch != "" {
+            fmt.Printf("Architecture: %s\n", arch)
+        }
+        
+        fmt.Println("---")
+    }
+}
+```
+
 ## Supported Fields
 
 ### Release File Fields
@@ -160,6 +208,27 @@ func main() {
 - **Tag**: Package tags for categorization
 - **License**: License information
 - **PhasedUpdatePercentage**: Gradual rollout percentage
+
+### Sources.list File Fields
+
+**Core Fields:**
+- **Type**: Entry type (`deb` for binaries, `deb-src` for sources)
+- **URI**: Repository URL or file path
+- **Distribution**: Suite name or codename (e.g., `stable`, `jammy`, `bookworm`)
+- **Components**: Repository components (e.g., `main`, `contrib`, `non-free`)
+
+**Options (in square brackets):**
+- **arch**: Target architectures (e.g., `amd64`, `arm64`)
+- **trusted**: Skip signature verification (`yes`/`no`)
+- **signed-by**: Path to GPG keyring file
+- **lang**: Language preferences for descriptions
+- **target**: Specify download targets
+- **pdiffs**: Enable/disable partial index files
+
+**Metadata:**
+- **Enabled**: Whether the entry is active (not commented out)
+- **OriginalLine**: Preserved original source line text
+- **LineNumber**: Line number in the source file
 
 ## Specification
 
