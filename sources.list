@@ -1,0 +1,10 @@
+deb http://repository.spotify.com/ stable non-free
+deb https://apt.postgresql.org/pub/repos/apt/ jammy-pgdg main
+deb https://apt.releases.hashicorp.com/ jammy main
+deb https://brave-browser-apt-release.s3.brave.com/ stable main
+deb https://deb.nodesource.com/node_20.x/ jammy main
+deb https://dl.google.com/linux/chrome/deb/ stable main
+deb https://download.docker.com/linux/ubuntu/ jammy stable
+deb https://packages.microsoft.com/ubuntu/22.04/prod/ jammy main
+deb https://pkgs.k8s.io/core:/stable:/v1.28/deb/ /
+deb https://updates.signal.org/desktop/apt/ xenial main

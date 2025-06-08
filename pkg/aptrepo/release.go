@@ -12,41 +12,41 @@ import (
 
 // HashEntry represents a single hash entry in MD5Sum, SHA1, or SHA256 fields
 type HashEntry struct {
-	Hash string
-	Size int64
-	Path string
+	Hash string `json:"hash"`
+	Size int64  `json:"size"`
+	Path string `json:"path"`
 }
 
 // Release represents an APT Release file with all standardized fields
 type Release struct {
 	// Mandatory fields
-	Suite         string // Suite or Codename (at least one required)
-	Codename      string
-	Architectures []string
-	Components    []string
-	Date          time.Time
-	SHA256        []HashEntry
+	Suite         string      `json:"suite,omitempty"`         // Suite or Codename (at least one required)
+	Codename      string      `json:"codename,omitempty"`
+	Architectures []string    `json:"architectures"`
+	Components    []string    `json:"components"`
+	Date          time.Time   `json:"date"`
+	SHA256        []HashEntry `json:"sha256,omitempty"`
 
 	// Optional metadata fields
-	Origin                        string
-	Label                         string
-	Version                       string
-	ValidUntil                    *time.Time
-	NotAutomatic                  bool
-	ButAutomaticUpgrades          bool
-	AcquireByHash                 bool
-	SignedBy                      []string
-	PackagesRequireAuthorization  string
-	Changelogs                    string
-	Snapshots                     string
-	NoSupportForArchitectureAll   bool
+	Origin                        string     `json:"origin,omitempty"`
+	Label                         string     `json:"label,omitempty"`
+	Version                       string     `json:"version,omitempty"`
+	ValidUntil                    *time.Time `json:"valid_until,omitempty"`
+	NotAutomatic                  bool       `json:"not_automatic,omitempty"`
+	ButAutomaticUpgrades          bool       `json:"but_automatic_upgrades,omitempty"`
+	AcquireByHash                 bool       `json:"acquire_by_hash,omitempty"`
+	SignedBy                      []string   `json:"signed_by,omitempty"`
+	PackagesRequireAuthorization  string     `json:"packages_require_authorization,omitempty"`
+	Changelogs                    string     `json:"changelogs,omitempty"`
+	Snapshots                     string     `json:"snapshots,omitempty"`
+	NoSupportForArchitectureAll   bool       `json:"no_support_for_architecture_all,omitempty"`
 
 	// Legacy hash fields (not for security)
-	MD5Sum []HashEntry
-	SHA1   []HashEntry
+	MD5Sum []HashEntry `json:"md5sum,omitempty"`
+	SHA1   []HashEntry `json:"sha1,omitempty"`
 
 	// Raw RFC822 record for access to non-standard fields
-	record rfc822.Record
+	record rfc822.Record `json:"-"`
 }
 
 // ParseRelease parses an APT Release file from the given reader

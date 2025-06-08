@@ -2,6 +2,7 @@ package aptrepo
 
 import (
 	"compress/gzip"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -205,6 +206,57 @@ func TestReleaseFieldAccess(t *testing.T) {
 	assert.Contains(t, fields, "Origin")
 	assert.Contains(t, fields, "Label")
 	assert.Contains(t, fields, "Suite")
+}
+
+func TestReleaseJSONSerialization(t *testing.T) {
+	// Test JSON marshaling/unmarshaling
+	releaseFile, err := os.Open("../rfc822/testdata/spotify-release.gz")
+	require.NoError(t, err)
+	defer releaseFile.Close()
+
+	gz, err := gzip.NewReader(releaseFile)
+	require.NoError(t, err)
+	defer gz.Close()
+
+	original, err := ParseRelease(gz)
+	require.NoError(t, err)
+
+	// Marshal to JSON
+	jsonData, err := json.Marshal(original)
+	require.NoError(t, err)
+	
+	// Verify JSON contains expected fields
+	var jsonMap map[string]interface{}
+	err = json.Unmarshal(jsonData, &jsonMap)
+	require.NoError(t, err)
+	
+	assert.Equal(t, "stable", jsonMap["suite"])
+	assert.Equal(t, "stable", jsonMap["codename"])
+	assert.Equal(t, "Spotify LTD", jsonMap["origin"])
+	assert.Equal(t, "Spotify Public Repository", jsonMap["label"])
+	assert.Contains(t, jsonMap, "architectures")
+	assert.Contains(t, jsonMap, "date")
+	assert.Contains(t, jsonMap, "sha256")
+	
+	// Verify the record field is excluded
+	assert.NotContains(t, jsonMap, "record")
+	
+	// Unmarshal back to struct
+	var unmarshaled Release
+	err = json.Unmarshal(jsonData, &unmarshaled)
+	require.NoError(t, err)
+	
+	// Verify key fields match (note: record field won't be preserved)
+	assert.Equal(t, original.Suite, unmarshaled.Suite)
+	assert.Equal(t, original.Codename, unmarshaled.Codename)
+	assert.Equal(t, original.Origin, unmarshaled.Origin)
+	assert.Equal(t, original.Label, unmarshaled.Label)
+	assert.Equal(t, original.Architectures, unmarshaled.Architectures)
+	assert.Equal(t, original.Components, unmarshaled.Components)
+	assert.Equal(t, original.Date.Unix(), unmarshaled.Date.Unix()) // Compare Unix timestamps
+	assert.Equal(t, len(original.SHA256), len(unmarshaled.SHA256))
+	
+	t.Logf("JSON output: %s", string(jsonData))
 }
 
 func TestAllReleaseFiles(t *testing.T) {
