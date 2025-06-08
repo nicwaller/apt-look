@@ -13,46 +13,46 @@ Value: 1.0.0`
 
 	parser := NewParser()
 
-	record, err := parser.ParseHeader(strings.NewReader(input))
+	header, err := parser.ParseHeader(strings.NewReader(input))
 	require.NoError(t, err)
-	require.NotEmpty(t, record, "No header found")
+	require.NotEmpty(t, header, "No header found")
 
 	// Test Lookup method
-	field, exists := record.Lookup("Name")
+	field, exists := header.Lookup("Name")
 	assert.True(t, exists)
 	assert.Equal(t, "Name", field.Name)
 	assert.Equal(t, FieldValues{"test-item"}, field.Value)
 
-	field, exists = record.Lookup("NonExistent")
+	field, exists = header.Lookup("NonExistent")
 	assert.False(t, exists)
 	assert.Empty(t, field.Name)
 	assert.Empty(t, field.Value)
 
 	// Test case-insensitive lookup
-	field, exists = record.Lookup("name")
+	field, exists = header.Lookup("name")
 	assert.True(t, exists)
 	assert.Equal(t, "Name", field.Name)
 	assert.Equal(t, FieldValues{"test-item"}, field.Value)
 
 	// Test Has method
-	assert.True(t, record.Has("Name"))
-	assert.True(t, record.Has("value")) // case-insensitive
-	assert.False(t, record.Has("NonExistent"))
+	assert.True(t, header.Has("Name"))
+	assert.True(t, header.Has("value")) // case-insensitive
+	assert.False(t, header.Has("NonExistent"))
 
 	// Test Get method
-	assert.Equal(t, "test-item", record.Get("Name"))
-	assert.Equal(t, "1.0.0", record.Get("value")) // case-insensitive
-	assert.Empty(t, record.Get("NonExistent"))
+	assert.Equal(t, "test-item", header.Get("Name"))
+	assert.Equal(t, "1.0.0", header.Get("value")) // case-insensitive
+	assert.Empty(t, header.Get("NonExistent"))
 
 	// Test GetLines method
-	lines := record.GetLines("Name")
+	lines := header.GetLines("Name")
 	assert.Equal(t, FieldValues{"test-item"}, lines)
-	lines = record.GetLines("value") // case-insensitive
+	lines = header.GetLines("value") // case-insensitive
 	assert.Equal(t, FieldValues{"1.0.0"}, lines)
-	lines = record.GetLines("NonExistent")
+	lines = header.GetLines("NonExistent")
 	assert.Empty(t, lines)
 
 	// Test Fields method
-	fields := record.Fields()
+	fields := header.Fields()
 	assert.Equal(t, []string{"Name", "Value"}, fields)
 }

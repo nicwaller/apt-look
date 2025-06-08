@@ -70,20 +70,20 @@ type Package struct {
 	BuildDependsIndep string `json:"build_depends_indep,omitempty"`
 	BuildConflicts    string `json:"build_conflicts,omitempty"`
 
-	// Raw RFC822 record for access to non-standard fields
-	record rfc822.Record `json:"-"`
+	// Raw RFC822 header for access to non-standard fields
+	header rfc822.Header `json:"-"`
 }
 
 // ParsePackages parses an APT Packages file and returns an iterator over Package entries
 func ParsePackages(r io.Reader) iter.Seq2[*Package, error] {
 	return func(yield func(*Package, error) bool) {
-		for record, err := range ParseRecords(r) {
+		for header, err := range ParseRecords(r) {
 			if err != nil {
 				yield(nil, fmt.Errorf("parsing packages file: %w", err))
 				return
 			}
 
-			pkg := &Package{record: record}
+			pkg := &Package{header: header}
 			if err := pkg.parseFields(); err != nil {
 				yield(nil, fmt.Errorf("parsing package fields: %w", err))
 				return
@@ -96,20 +96,20 @@ func ParsePackages(r io.Reader) iter.Seq2[*Package, error] {
 	}
 }
 
-// parseFields extracts and validates all fields from the RFC822 record
+// parseFields extracts and validates all fields from the RFC822 header
 func (p *Package) parseFields() error {
 	// Parse mandatory fields
-	p.Package = p.record.Get("Package")
+	p.Package = p.header.Get("Package")
 	if p.Package == "" {
 		return fmt.Errorf("package record must have Package field")
 	}
 
-	p.Filename = p.record.Get("Filename")
+	p.Filename = p.header.Get("Filename")
 	if p.Filename == "" {
 		return fmt.Errorf("package record must have Filename field")
 	}
 
-	sizeField := p.record.Get("Size")
+	sizeField := p.header.Get("Size")
 	if sizeField == "" {
 		return fmt.Errorf("package record must have Size field")
 	}
@@ -120,25 +120,25 @@ func (p *Package) parseFields() error {
 	p.Size = size
 
 	// Parse highly recommended fields
-	p.Architecture = p.record.Get("Architecture")
-	p.Version = p.record.Get("Version")
-	p.SHA256 = p.record.Get("SHA256")
-	p.Description = p.record.Get("Description")
+	p.Architecture = p.header.Get("Architecture")
+	p.Version = p.header.Get("Version")
+	p.SHA256 = p.header.Get("SHA256")
+	p.Description = p.header.Get("Description")
 
 	// Parse hash fields
-	p.MD5sum = p.record.Get("MD5sum")
-	p.SHA1 = p.record.Get("SHA1")
-	p.SHA512 = p.record.Get("SHA512")
+	p.MD5sum = p.header.Get("MD5sum")
+	p.SHA1 = p.header.Get("SHA1")
+	p.SHA512 = p.header.Get("SHA512")
 
 	// Parse control fields
-	p.Priority = p.record.Get("Priority")
-	p.Section = p.record.Get("Section")
-	p.Source = p.record.Get("Source")
-	p.Maintainer = p.record.Get("Maintainer")
-	p.Homepage = p.record.Get("Homepage")
+	p.Priority = p.header.Get("Priority")
+	p.Section = p.header.Get("Section")
+	p.Source = p.header.Get("Source")
+	p.Maintainer = p.header.Get("Maintainer")
+	p.Homepage = p.header.Get("Homepage")
 
 	// Parse Installed-Size with validation
-	if installedSizeField := p.record.Get("Installed-Size"); installedSizeField != "" {
+	if installedSizeField := p.header.Get("Installed-Size"); installedSizeField != "" {
 		installedSize, err := strconv.ParseInt(installedSizeField, 10, 64)
 		if err != nil {
 			return fmt.Errorf("invalid Installed-Size field: %w", err)
@@ -147,29 +147,29 @@ func (p *Package) parseFields() error {
 	}
 
 	// Parse dependency fields
-	p.Depends = p.record.Get("Depends")
-	p.PreDepends = p.record.Get("Pre-Depends")
-	p.Recommends = p.record.Get("Recommends")
-	p.Suggests = p.record.Get("Suggests")
-	p.Enhances = p.record.Get("Enhances")
-	p.Breaks = p.record.Get("Breaks")
-	p.Conflicts = p.record.Get("Conflicts")
-	p.Provides = p.record.Get("Provides")
-	p.Replaces = p.record.Get("Replaces")
+	p.Depends = p.header.Get("Depends")
+	p.PreDepends = p.header.Get("Pre-Depends")
+	p.Recommends = p.header.Get("Recommends")
+	p.Suggests = p.header.Get("Suggests")
+	p.Enhances = p.header.Get("Enhances")
+	p.Breaks = p.header.Get("Breaks")
+	p.Conflicts = p.header.Get("Conflicts")
+	p.Provides = p.header.Get("Provides")
+	p.Replaces = p.header.Get("Replaces")
 
 	// Parse multi-arch field
-	p.MultiArch = p.record.Get("Multi-Arch")
+	p.MultiArch = p.header.Get("Multi-Arch")
 
 	// Parse boolean fields
-	p.Essential = parseBoolField(p.record.Get("Essential"))
+	p.Essential = parseBoolField(p.header.Get("Essential"))
 
 	// Parse additional metadata
-	p.Tag = p.record.Get("Tag")
-	p.Task = p.record.Get("Task")
-	p.DescriptionMd5 = p.record.Get("Description-md5")
+	p.Tag = p.header.Get("Tag")
+	p.Task = p.header.Get("Task")
+	p.DescriptionMd5 = p.header.Get("Description-md5")
 
 	// Parse phased update percentage
-	if phasedField := p.record.Get("Phased-Update-Percentage"); phasedField != "" {
+	if phasedField := p.header.Get("Phased-Update-Percentage"); phasedField != "" {
 		phased, err := strconv.Atoi(phasedField)
 		if err != nil {
 			return fmt.Errorf("invalid Phased-Update-Percentage field: %w", err)
@@ -181,28 +181,28 @@ func (p *Package) parseFields() error {
 	}
 
 	// Parse additional fields
-	p.License = p.record.Get("License")
-	p.Vendor = p.record.Get("Vendor")
-	p.BuildDepends = p.record.Get("Build-Depends")
-	p.BuildDependsIndep = p.record.Get("Build-Depends-Indep")
-	p.BuildConflicts = p.record.Get("Build-Conflicts")
+	p.License = p.header.Get("License")
+	p.Vendor = p.header.Get("Vendor")
+	p.BuildDepends = p.header.Get("Build-Depends")
+	p.BuildDependsIndep = p.header.Get("Build-Depends-Indep")
+	p.BuildConflicts = p.header.Get("Build-Conflicts")
 
 	return nil
 }
 
-// GetField returns the raw field value from the underlying RFC822 record
+// GetField returns the raw field value from the underlying RFC822 header
 func (p *Package) GetField(name string) string {
-	return p.record.Get(name)
+	return p.header.Get(name)
 }
 
-// HasField checks if a field exists in the underlying RFC822 record
+// HasField checks if a field exists in the underlying RFC822 header
 func (p *Package) HasField(name string) bool {
-	return p.record.Has(name)
+	return p.header.Has(name)
 }
 
-// Fields returns all field names from the underlying RFC822 record
+// Fields returns all field names from the underlying RFC822 header
 func (p *Package) Fields() []string {
-	return p.record.Fields()
+	return p.header.Fields()
 }
 
 // GetDependencies parses and returns dependency relationships as structured data

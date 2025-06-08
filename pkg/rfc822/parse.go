@@ -16,10 +16,10 @@ func NewParser() *Parser {
 	return &Parser{}
 }
 
-// ParseHeader parses a single RFC822 header section and returns it as a Record
-func (p *Parser) ParseHeader(r io.Reader) (Record, error) {
+// ParseHeader parses a single RFC822 header section and returns it as a Header
+func (p *Parser) ParseHeader(r io.Reader) (Header, error) {
 	scanner := bufio.NewScanner(r)
-	var record Record
+	var header Header
 	var currentField string
 	var currentValue strings.Builder
 
@@ -27,7 +27,7 @@ func (p *Parser) ParseHeader(r io.Reader) (Record, error) {
 		if currentField != "" {
 			value := strings.TrimSpace(currentValue.String())
 			lines := strings.Split(value, "\n")
-			record = append(record, Field{
+			header = append(header, Field{
 				Name:  currentField,
 				Value: lines,
 			})
@@ -77,9 +77,9 @@ func (p *Parser) ParseHeader(r io.Reader) (Record, error) {
 			return nil, fmt.Errorf("invalid field name %q: %w", fieldName, err)
 		}
 
-		// Check for duplicate field in current record
-		if record.Has(fieldName) {
-			return nil, fmt.Errorf("duplicate field %q in record", fieldName)
+		// Check for duplicate field in current header
+		if header.Has(fieldName) {
+			return nil, fmt.Errorf("duplicate field %q in header", fieldName)
 		}
 
 		currentField = fieldName
@@ -94,7 +94,7 @@ func (p *Parser) ParseHeader(r io.Reader) (Record, error) {
 		return nil, fmt.Errorf("scanner error: %w", err)
 	}
 
-	return record, nil
+	return header, nil
 }
 
 

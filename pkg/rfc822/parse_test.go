@@ -19,23 +19,23 @@ Comment: A test field
 
 	parser := NewParser()
 
-	record, err := parser.ParseHeader(strings.NewReader(input))
+	header, err := parser.ParseHeader(strings.NewReader(input))
 	require.NoError(t, err)
-	require.NotEmpty(t, record, "No header found")
+	require.NotEmpty(t, header, "No header found")
 
 	// Test field access
-	assert.Equal(t, "test-item", record.Get("Name"))
-	assert.Equal(t, "1.0.0", record.Get("Value"))
-	assert.Equal(t, "example", record.Get("Type"))
+	assert.Equal(t, "test-item", header.Get("Name"))
+	assert.Equal(t, "1.0.0", header.Get("Value"))
+	assert.Equal(t, "example", header.Get("Type"))
 
 	expectedComment := "A test field This is a multi-line comment with additional details."
-	assert.Equal(t, expectedComment, record.Get("Comment"))
+	assert.Equal(t, expectedComment, header.Get("Comment"))
 
 	// Test case-insensitive access
-	assert.Equal(t, "test-item", record.Get("name"))
+	assert.Equal(t, "test-item", header.Get("name"))
 
 	// Test field ordering preservation
-	fields := record.Fields()
+	fields := header.Fields()
 	expectedOrder := []string{"Name", "Value", "Type", "Comment"}
 	assert.Equal(t, expectedOrder, fields)
 }
@@ -49,16 +49,16 @@ Name: item2
 Value: 2.0.0`
 
 	parser := NewParser()
-	record, err := parser.ParseHeader(strings.NewReader(input))
+	header, err := parser.ParseHeader(strings.NewReader(input))
 	require.NoError(t, err)
-	require.NotEmpty(t, record, "No header found")
+	require.NotEmpty(t, header, "No header found")
 
-	// Should only parse the first record before the blank line
-	assert.Equal(t, "item1", record.Get("Name"))
-	assert.Equal(t, "1.0.0", record.Get("Value"))
+	// Should only parse the first header before the blank line
+	assert.Equal(t, "item1", header.Get("Name"))
+	assert.Equal(t, "1.0.0", header.Get("Value"))
 	
-	// Should not contain the second record
-	assert.False(t, record.Has("item2"))
+	// Should not contain the second header
+	assert.False(t, header.Has("item2"))
 }
 
 func TestControlFormatRoundTrip(t *testing.T) {
@@ -72,13 +72,13 @@ Comment: A test field
 
 	parser := NewParser()
 
-	record, err := parser.ParseHeader(strings.NewReader(input))
+	header, err := parser.ParseHeader(strings.NewReader(input))
 	require.NoError(t, err)
-	require.NotEmpty(t, record, "No header found")
+	require.NotEmpty(t, header, "No header found")
 
 	// Convert back to control format and verify byte-for-byte identical
 	var sb strings.Builder
-	_, _ = record.Write(&sb)
+	_, _ = header.Write(&sb)
 	output := sb.String()
 	assert.Equal(t, input, output, "Round-trip conversion not identical")
 }

@@ -25,19 +25,19 @@ For parsing multiple records separated by blank lines (as used in APT repository
 ### Types
 
 - **`Field`**: A single header field with Name and Value ([]string for line-based handling)
-- **`Record`**: A slice of Fields representing a single RFC 822 header section
+- **`Header`**: A slice of Fields representing a single RFC 822 header section
 - **`Parser`**: The main parser type
 
 ### Methods
 
 - **`NewParser()`**: Create a new parser instance
-- **`ParseHeader(r io.Reader) (Record, error)`**: Parse a single RFC 822 header section
-- **`Record.Lookup(field string) (Field, bool)`**: Get field and existence check (case-insensitive)
-- **`Record.Get(field string) string`**: Get field value as single string (case-insensitive)
-- **`Record.GetLines(field string) []string`**: Get field value as lines (case-insensitive)
-- **`Record.Has(field string) bool`**: Check if field exists (case-insensitive)
-- **`Record.Fields() []string`**: List all field names in order
-- **`Record.String() string`**: Convert record back to RFC 822 format
+- **`ParseHeader(r io.Reader) (Header, error)`**: Parse a single RFC 822 header section
+- **`Header.Lookup(field string) (Field, bool)`**: Get field and existence check (case-insensitive)
+- **`Header.Get(field string) string`**: Get field value as single string (case-insensitive)
+- **`Header.GetLines(field string) []string`**: Get field value as lines (case-insensitive)
+- **`Header.Has(field string) bool`**: Check if field exists (case-insensitive)
+- **`Header.Fields() []string`**: List all field names in order
+- **`Header.String() string`**: Convert header back to RFC 822 format
 - **`FieldValues.Unfold() string`**: Convert field value to single logical line per RFC 822 unfolding rules
 
 ## Validation

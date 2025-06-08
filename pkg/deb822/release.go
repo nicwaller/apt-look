@@ -45,23 +45,23 @@ type Release struct {
 	MD5Sum []HashEntry `json:"md5sum,omitempty"`
 	SHA1   []HashEntry `json:"sha1,omitempty"`
 
-	// Raw RFC822 record for access to non-standard fields
-	record rfc822.Record `json:"-"`
+	// Raw RFC822 header for access to non-standard fields
+	header rfc822.Header `json:"-"`
 }
 
 // ParseRelease parses an APT Release file from the given reader
 func ParseRelease(r io.Reader) (*Release, error) {
 	parser := rfc822.NewParser()
-	record, err := parser.ParseHeader(r)
+	header, err := parser.ParseHeader(r)
 	if err != nil {
 		return nil, fmt.Errorf("parsing release file: %w", err)
 	}
 
-	if len(record) == 0 {
+	if len(header) == 0 {
 		return nil, fmt.Errorf("no header found in release file")
 	}
 
-	release := &Release{record: record}
+	release := &Release{header: header}
 	if err := release.parseFields(); err != nil {
 		return nil, fmt.Errorf("parsing release fields: %w", err)
 	}
@@ -69,11 +69,11 @@ func ParseRelease(r io.Reader) (*Release, error) {
 	return release, nil
 }
 
-// parseFields extracts and validates all fields from the RFC822 record
+// parseFields extracts and validates all fields from the RFC822 header
 func (r *Release) parseFields() error {
 	// Parse mandatory/important fields
-	r.Suite = r.record.Get("Suite")
-	r.Codename = r.record.Get("Codename")
+	r.Suite = r.header.Get("Suite")
+	r.Codename = r.header.Get("Codename")
 
 	// At least one of Suite or Codename must be present
 	if r.Suite == "" && r.Codename == "" {
@@ -81,20 +81,20 @@ func (r *Release) parseFields() error {
 	}
 
 	// Parse architectures (required)
-	archField := r.record.Get("Architectures")
+	archField := r.header.Get("Architectures")
 	if archField == "" {
 		return fmt.Errorf("release file must have Architectures field")
 	}
 	r.Architectures = strings.Fields(archField)
 
 	// Parse components (usually required, but some repos like Kubernetes don't have it)
-	compField := r.record.Get("Components")
+	compField := r.header.Get("Components")
 	if compField != "" {
 		r.Components = strings.Fields(compField)
 	}
 
 	// Parse date (required)
-	dateField := r.record.Get("Date")
+	dateField := r.header.Get("Date")
 	if dateField == "" {
 		return fmt.Errorf("release file must have Date field")
 	}
@@ -105,7 +105,7 @@ func (r *Release) parseFields() error {
 	r.Date = date
 
 	// Parse SHA256 (required for modern repositories)
-	sha256Lines := r.record.GetLines("SHA256")
+	sha256Lines := r.header.GetLines("SHA256")
 	if len(sha256Lines) > 0 {
 		entries, err := parseHashEntries(sha256Lines)
 		if err != nil {
@@ -115,12 +115,12 @@ func (r *Release) parseFields() error {
 	}
 
 	// Parse optional fields
-	r.Origin = r.record.Get("Origin")
-	r.Label = r.record.Get("Label")
-	r.Version = r.record.Get("Version")
+	r.Origin = r.header.Get("Origin")
+	r.Label = r.header.Get("Label")
+	r.Version = r.header.Get("Version")
 
 	// Parse ValidUntil
-	if validUntilField := r.record.Get("Valid-Until"); validUntilField != "" {
+	if validUntilField := r.header.Get("Valid-Until"); validUntilField != "" {
 		validUntil, err := parseRFC1123(validUntilField)
 		if err != nil {
 			return fmt.Errorf("invalid Valid-Until field: %w", err)
@@ -129,13 +129,13 @@ func (r *Release) parseFields() error {
 	}
 
 	// Parse boolean fields
-	r.NotAutomatic = parseBoolField(r.record.Get("NotAutomatic"))
-	r.ButAutomaticUpgrades = parseBoolField(r.record.Get("ButAutomaticUpgrades"))
-	r.AcquireByHash = parseBoolField(r.record.Get("Acquire-By-Hash"))
-	r.NoSupportForArchitectureAll = parseBoolField(r.record.Get("No-Support-for-Architecture-all"))
+	r.NotAutomatic = parseBoolField(r.header.Get("NotAutomatic"))
+	r.ButAutomaticUpgrades = parseBoolField(r.header.Get("ButAutomaticUpgrades"))
+	r.AcquireByHash = parseBoolField(r.header.Get("Acquire-By-Hash"))
+	r.NoSupportForArchitectureAll = parseBoolField(r.header.Get("No-Support-for-Architecture-all"))
 
 	// Parse SignedBy
-	if signedByField := r.record.Get("Signed-By"); signedByField != "" {
+	if signedByField := r.header.Get("Signed-By"); signedByField != "" {
 		r.SignedBy = strings.Split(signedByField, ",")
 		for i := range r.SignedBy {
 			r.SignedBy[i] = strings.TrimSpace(r.SignedBy[i])
@@ -143,12 +143,12 @@ func (r *Release) parseFields() error {
 	}
 
 	// Parse other optional fields
-	r.PackagesRequireAuthorization = r.record.Get("Packages-Require-Authorization")
-	r.Changelogs = r.record.Get("Changelogs")
-	r.Snapshots = r.record.Get("Snapshots")
+	r.PackagesRequireAuthorization = r.header.Get("Packages-Require-Authorization")
+	r.Changelogs = r.header.Get("Changelogs")
+	r.Snapshots = r.header.Get("Snapshots")
 
 	// Parse legacy hash fields
-	if md5Lines := r.record.GetLines("MD5Sum"); len(md5Lines) > 0 {
+	if md5Lines := r.header.GetLines("MD5Sum"); len(md5Lines) > 0 {
 		entries, err := parseHashEntries(md5Lines)
 		if err != nil {
 			return fmt.Errorf("invalid MD5Sum field: %w", err)
@@ -156,7 +156,7 @@ func (r *Release) parseFields() error {
 		r.MD5Sum = entries
 	}
 
-	if sha1Lines := r.record.GetLines("SHA1"); len(sha1Lines) > 0 {
+	if sha1Lines := r.header.GetLines("SHA1"); len(sha1Lines) > 0 {
 		entries, err := parseHashEntries(sha1Lines)
 		if err != nil {
 			return fmt.Errorf("invalid SHA1 field: %w", err)
@@ -243,17 +243,17 @@ func parseBoolField(value string) bool {
 	}
 }
 
-// GetField returns the raw field value from the underlying RFC822 record
+// GetField returns the raw field value from the underlying RFC822 header
 func (r *Release) GetField(name string) string {
-	return r.record.Get(name)
+	return r.header.Get(name)
 }
 
-// HasField checks if a field exists in the underlying RFC822 record
+// HasField checks if a field exists in the underlying RFC822 header
 func (r *Release) HasField(name string) bool {
-	return r.record.Has(name)
+	return r.header.Has(name)
 }
 
-// Fields returns all field names from the underlying RFC822 record
+// Fields returns all field names from the underlying RFC822 header
 func (r *Release) Fields() []string {
-	return r.record.Fields()
+	return r.header.Fields()
 }

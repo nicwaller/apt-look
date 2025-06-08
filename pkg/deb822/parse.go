@@ -10,10 +10,10 @@ import (
 	"github.com/nicwaller/apt-look/pkg/rfc822"
 )
 
-// ParseRecords returns an iterator over multiple records from a deb822-style document
-// Each record is separated by blank lines, which is a deb822 extension to RFC 822
-func ParseRecords(r io.Reader) iter.Seq2[rfc822.Record, error] {
-	return func(yield func(rfc822.Record, error) bool) {
+// ParseRecords returns an iterator over multiple headers from a deb822-style document
+// Each header is separated by blank lines, which is a deb822 extension to RFC 822
+func ParseRecords(r io.Reader) iter.Seq2[rfc822.Header, error] {
+	return func(yield func(rfc822.Header, error) bool) {
 		scanner := bufio.NewScanner(r)
 		var lines []string
 
@@ -22,13 +22,13 @@ func ParseRecords(r io.Reader) iter.Seq2[rfc822.Record, error] {
 				// Join lines and parse as a single header
 				content := strings.Join(lines, "\n")
 				parser := rfc822.NewParser()
-				record, err := parser.ParseHeader(strings.NewReader(content))
+				header, err := parser.ParseHeader(strings.NewReader(content))
 				if err != nil {
-					yield(nil, fmt.Errorf("parsing record: %w", err))
+					yield(nil, fmt.Errorf("parsing header: %w", err))
 					return false
 				}
-				if len(record) > 0 {
-					if !yield(record, nil) {
+				if len(header) > 0 {
+					if !yield(header, nil) {
 						return false
 					}
 				}
@@ -40,7 +40,7 @@ func ParseRecords(r io.Reader) iter.Seq2[rfc822.Record, error] {
 		for scanner.Scan() {
 			line := scanner.Text()
 
-			// Empty line indicates end of record
+			// Empty line indicates end of header
 			if strings.TrimSpace(line) == "" {
 				if !flushRecord() {
 					return
@@ -51,7 +51,7 @@ func ParseRecords(r io.Reader) iter.Seq2[rfc822.Record, error] {
 			lines = append(lines, line)
 		}
 
-		// Flush any remaining record
+		// Flush any remaining header
 		flushRecord()
 
 		if err := scanner.Err(); err != nil {

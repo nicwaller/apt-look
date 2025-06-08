@@ -5,9 +5,9 @@ import (
 	"strings"
 )
 
-// Record represents a single record (paragraph) in an RFC822-style message
+// Header represents a single header section in an RFC822-style message
 // Fields are stored in a slice to preserve the original ordering for round-trip conversion
-type Record []Field
+type Header []Field
 
 // Field represents a single field in an RFC822-style message
 type Field struct {
