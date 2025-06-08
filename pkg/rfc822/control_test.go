@@ -1,4 +1,4 @@
-package debian
+package rfc822
 
 import (
 	"compress/gzip"
@@ -217,7 +217,7 @@ Version: 1.0.0`
 	// Test Lookup method
 	value, exists := record.Lookup("Package")
 	assert.True(t, exists)
-	assert.Equal(t, "test-package", value)
+	assert.Equal(t, []string{"test-package"}, value)
 
 	value, exists = record.Lookup("NonExistent")
 	assert.False(t, exists)
@@ -226,7 +226,7 @@ Version: 1.0.0`
 	// Test case-insensitive lookup
 	value, exists = record.Lookup("package")
 	assert.True(t, exists)
-	assert.Equal(t, "test-package", value)
+	assert.Equal(t, []string{"test-package"}, value)
 
 	// Test Has method
 	assert.True(t, record.Has("Package"))
@@ -244,7 +244,7 @@ Version: 1.0.0`
 }
 
 func TestFieldStringMethods(t *testing.T) {
-	field := Field{Name: "Package", Value: "test-package"}
+	field := Field{Name: "Package", Value: []string{"test-package"}}
 
 	// Test String() method (used by %v)
 	expectedString := "Package: test-package"
@@ -252,14 +252,14 @@ func TestFieldStringMethods(t *testing.T) {
 	assert.Equal(t, expectedString, fmt.Sprintf("%v", field))
 
 	// Test GoString() method (used by %#v)
-	expectedGoString := `debian.Field{Name: "Package", Value: "test-package"}`
+	expectedGoString := `rfc822.Field{Name: "Package", Value: ["test-package"]}`
 	assert.Equal(t, expectedGoString, field.GoString())
 	assert.Equal(t, expectedGoString, fmt.Sprintf("%#v", field))
 
 	// Test with multi-line value
-	multilineField := Field{Name: "Description", Value: "First line\nSecond line"}
+	multilineField := Field{Name: "Description", Value: []string{"First line", "Second line"}}
 	expectedMultilineString := "Description: First line\nSecond line"
-	expectedMultilineGoString := `debian.Field{Name: "Description", Value: "First line\nSecond line"}`
+	expectedMultilineGoString := `rfc822.Field{Name: "Description", Value: ["First line" "Second line"]}`
 
 	assert.Equal(t, expectedMultilineString, multilineField.String())
 	assert.Equal(t, expectedMultilineGoString, multilineField.GoString())

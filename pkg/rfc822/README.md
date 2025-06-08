@@ -1,12 +1,12 @@
-# debian package
+# rfc822 package
 
-A Go package for parsing Debian control format files, including APT repository Release and Packages files.
+A Go package for parsing RFC822-style messages, including APT repository Release and Packages files.
 
 ## Features
 
-- **Spec-compliant parsing**: Follows the official Debian control field format specification
+- **Spec-compliant parsing**: Follows RFC822-style message format specification
 - **Comment handling**: Skips lines starting with '#'
-- **Field validation**: Rejects invalid field names per Debian policy
+- **Field validation**: Rejects invalid field names per RFC822 rules
 - **Duplicate detection**: Prevents duplicate fields within the same record
 - **Case-insensitive access**: Retrieve fields regardless of case
 - **Multi-line support**: Handles continuation lines and folded fields
@@ -17,7 +17,7 @@ A Go package for parsing Debian control format files, including APT repository R
 
 ### Types
 
-- **`Field`**: A single field with Name and Value
+- **`Field`**: A single field with Name and Value ([]string for line-based handling)
 - **`Record`**: A slice of Fields representing a single control file record (paragraph), preserving field order
 - **`Parser`**: The main parser type
 
@@ -25,15 +25,16 @@ A Go package for parsing Debian control format files, including APT repository R
 
 - **`NewParser()`**: Create a new parser instance
 - **`ParseRecords(r io.Reader)`**: Returns an iterator over records (memory-efficient)
-- **`Record.Lookup(field string) (string, bool)`**: Get field value and existence check (case-insensitive)
-- **`Record.Get(field string)`**: Get field value (case-insensitive, returns empty string if not found)
+- **`Record.Lookup(field string) ([]string, bool)`**: Get field value lines and existence check (case-insensitive)
+- **`Record.Get(field string)`**: Get field value as single string (case-insensitive, returns empty string if not found)
+- **`Record.GetLines(field string)`**: Get field value as lines (case-insensitive, returns empty slice if not found)
 - **`Record.Has(field string)`**: Check if field exists (case-insensitive)
 - **`Record.Fields()`**: List all field names in order
-- **`Record.String()`**: Convert record back to Debian control format
+- **`Record.String()`**: Convert record back to RFC822-style format
 
 ### Validation
 
-The parser enforces Debian control field format specification:
+The parser enforces RFC822-style message format specification:
 
 - Field names cannot be empty
 - Field names cannot start with '#' or '-'
@@ -46,7 +47,7 @@ The parser enforces Debian control field format specification:
 Run tests with:
 
 ```bash
-go test ./pkg/debian
+go test ./pkg/rfc822
 ```
 
 The test suite includes real-world data from multiple APT repositories to ensure robust parsing.

@@ -1,4 +1,4 @@
-package debian
+package rfc822
 
 import (
 	"bufio"
@@ -9,33 +9,33 @@ import (
 	"strings"
 )
 
-// Field represents a single field in a Debian control format file
+// Field represents a single field in an RFC822-style message
 type Field struct {
-	Name  string `json:"name"`
-	Value string `json:"value"`
+	Name  string   `json:"name"`
+	Value []string `json:"value"`
 }
 
 func (f Field) String() string {
-	return fmt.Sprintf("%s: %s", f.Name, f.Value)
+	return fmt.Sprintf("%s: %s", f.Name, strings.Join(f.Value, "\n"))
 }
 
 func (f Field) GoString() string {
-	return fmt.Sprintf("debian.Field{Name: %q, Value: %q}", f.Name, f.Value)
+	return fmt.Sprintf("rfc822.Field{Name: %q, Value: %q}", f.Name, f.Value)
 }
 
-// Record represents a single record (paragraph) in a Debian control format file
+// Record represents a single record (paragraph) in an RFC822-style message
 // Fields are stored in a slice to preserve the original ordering for round-trip conversion
 type Record []Field
 
-// Parser parses Debian control format files
+// Parser parses RFC822-style messages
 type Parser struct{}
 
-// NewParser creates a new Debian control format parser
+// NewParser creates a new RFC822-style message parser
 func NewParser() *Parser {
 	return &Parser{}
 }
 
-// ParseRecords returns an iterator over records from a Debian control format file
+// ParseRecords returns an iterator over records from an RFC822-style message
 func (p *Parser) ParseRecords(r io.Reader) iter.Seq2[Record, error] {
 	return func(yield func(Record, error) bool) {
 		if err := p.parseRecords(r, yield); err != nil {
@@ -54,9 +54,10 @@ func (p *Parser) parseRecords(r io.Reader, yield func(Record, error) bool) error
 	flushCurrentField := func() {
 		if currentField != "" {
 			value := strings.TrimSpace(currentValue.String())
+			lines := strings.Split(value, "\n")
 			currentRecord = append(currentRecord, Field{
 				Name:  currentField,
-				Value: value,
+				Value: lines,
 			})
 			currentField = ""
 			currentValue.Reset()
@@ -136,7 +137,7 @@ func (p *Parser) parseRecords(r io.Reader, yield func(Record, error) bool) error
 	return nil
 }
 
-// validateFieldName checks if a field name is valid according to Debian policy
+// validateFieldName checks if a field name is valid according to RFC822 rules
 func (p *Parser) validateFieldName(name string) error {
 	// Field names must not be empty
 	if name == "" {
@@ -159,7 +160,7 @@ func (p *Parser) validateFieldName(name string) error {
 
 // Lookup retrieves a field value from a record (case-insensitive)
 // Returns the value and whether the field was found, following Go map idiom
-func (r Record) Lookup(field string) (string, bool) {
+func (r Record) Lookup(field string) ([]string, bool) {
 	// Try exact match first
 	for _, f := range r {
 		if f.Name == field {
@@ -174,12 +175,22 @@ func (r Record) Lookup(field string) (string, bool) {
 		}
 	}
 
-	return "", false
+	return nil, false
 }
 
-// Get retrieves a field value from a record (case-insensitive)
+// Get retrieves a field value from a record (case-insensitive) as a single string
 // Returns empty string if field doesn't exist
 func (r Record) Get(field string) string {
+	value, exists := r.Lookup(field)
+	if !exists || len(value) == 0 {
+		return ""
+	}
+	return strings.Join(value, "\n")
+}
+
+// GetLines retrieves a field value from a record (case-insensitive) as lines
+// Returns empty slice if field doesn't exist
+func (r Record) GetLines(field string) []string {
 	value, _ := r.Lookup(field)
 	return value
 }
@@ -210,14 +221,17 @@ func (r Record) Write(writer io.Writer) (int, error) {
 		sb.WriteString(": ")
 
 		// Handle multi-line values
-		lines := strings.Split(field.Value, "\n")
-		sb.WriteString(lines[0])
-		sb.WriteString("\n")
+		if len(field.Value) > 0 {
+			sb.WriteString(field.Value[0])
+			sb.WriteString("\n")
 
-		// Add continuation lines with proper indentation
-		for _, line := range lines[1:] {
-			sb.WriteString(" ")
-			sb.WriteString(line)
+			// Add continuation lines with proper indentation
+			for _, line := range field.Value[1:] {
+				sb.WriteString(" ")
+				sb.WriteString(line)
+				sb.WriteString("\n")
+			}
+		} else {
 			sb.WriteString("\n")
 		}
 	}
