@@ -11,8 +11,8 @@ type Record []Field
 
 // Field represents a single field in an RFC822-style message
 type Field struct {
-	Name  string      `json:"name"`
-	Value FieldValues `json:"value"`
+	Name  string
+	Value FieldValues
 }
 
 // String() is used to display values in the Go debugger

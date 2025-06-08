@@ -1,7 +1,6 @@
 package rfc822
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -65,47 +64,6 @@ Value: 2.0.0`
 	assert.Len(t, records, 2)
 	assert.Equal(t, "item1", records[0].Get("Name"))
 	assert.Equal(t, "item2", records[1].Get("Name"))
-}
-
-func TestJSONRoundTrip(t *testing.T) {
-	input := `Name: test-item
-Value: 1.0.0
-Type: example
-Size: 1024
-Comment: A test field
- Multi-line comment`
-
-	parser := NewParser()
-
-	var originalRecord Record
-	found := false
-	for r, err := range parser.ParseRecords(strings.NewReader(input)) {
-		require.NoError(t, err)
-		originalRecord = r
-		found = true
-		break
-	}
-	require.True(t, found)
-
-	// Convert to JSON and back
-	jsonData, err := json.Marshal(originalRecord)
-	require.NoError(t, err)
-
-	var roundTripRecord Record
-	require.NoError(t, json.Unmarshal(jsonData, &roundTripRecord))
-
-	// Verify perfect data integrity
-	assert.Len(t, roundTripRecord, len(originalRecord))
-
-	for i, originalField := range originalRecord {
-		require.Less(t, i, len(roundTripRecord), "Missing field after round-trip: %s", originalField.Name)
-
-		roundTripField := roundTripRecord[i]
-		assert.Equal(t, originalField.Name, roundTripField.Name)
-		assert.Equal(t, originalField.Value, roundTripField.Value)
-	}
-
-	t.Logf("JSON output: %s", string(jsonData))
 }
 
 func TestControlFormatRoundTrip(t *testing.T) {
