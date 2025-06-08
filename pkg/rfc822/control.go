@@ -9,35 +9,6 @@ import (
 	"strings"
 )
 
-// Field represents a single field in an RFC822-style message
-type Field struct {
-	Name  string   `json:"name"`
-	Value []string `json:"value"`
-}
-
-func (f Field) String() string {
-	return fmt.Sprintf("%s: %s", f.Name, strings.Join(f.Value, "\n"))
-}
-
-func (f Field) GoString() string {
-	return fmt.Sprintf("rfc822.Field{Name: %q, Value: %q}", f.Name, f.Value)
-}
-
-// Unfold returns the field value as a single logical line according to RFC822 unfolding rules
-// CRLF immediately followed by LWSP-char is replaced with the LWSP-char (space).
-func (f Field) Unfold() string {
-	if len(f.Value) == 0 {
-		return ""
-	}
-
-	// Join all lines with a single space, effectively "unfolding" the field
-	return strings.Join(f.Value, " ")
-}
-
-// Record represents a single record (paragraph) in an RFC822-style message
-// Fields are stored in a slice to preserve the original ordering for round-trip conversion
-type Record []Field
-
 // Parser parses RFC822-style messages
 type Parser struct{}
 

@@ -251,83 +251,25 @@ func TestFieldStringMethods(t *testing.T) {
 	assert.Equal(t, expectedString, field.String())
 	assert.Equal(t, expectedString, fmt.Sprintf("%v", field))
 
-	// Test GoString() method (used by %#v)
-	expectedGoString := `rfc822.Field{Name: "Name", Value: ["test-item"]}`
-	assert.Equal(t, expectedGoString, field.GoString())
-	assert.Equal(t, expectedGoString, fmt.Sprintf("%#v", field))
-
 	// Test with multi-line value
 	multilineField := Field{Name: "Comment", Value: []string{"First line", "Second line"}}
-	expectedMultilineString := "Comment: First line\nSecond line"
-	expectedMultilineGoString := `rfc822.Field{Name: "Comment", Value: ["First line" "Second line"]}`
+	expectedMultilineString := "Comment: First line Second line"
 
 	assert.Equal(t, expectedMultilineString, multilineField.String())
-	assert.Equal(t, expectedMultilineGoString, multilineField.GoString())
-}
-
-func TestFieldUnfold(t *testing.T) {
-	tests := []struct {
-		name     string
-		field    Field
-		expected string
-	}{
-		{
-			name:     "empty field",
-			field:    Field{Name: "Name", Value: []string{}},
-			expected: "",
-		},
-		{
-			name:     "single line field",
-			field:    Field{Name: "Name", Value: []string{"test-item"}},
-			expected: "test-item",
-		},
-		{
-			name:     "two line field",
-			field:    Field{Name: "Comment", Value: []string{"Short comment", "Longer detailed comment"}},
-			expected: "Short comment Longer detailed comment",
-		},
-		{
-			name:     "three line field",
-			field:    Field{Name: "Comment", Value: []string{"Short comment", "Longer detailed comment", "Even more details"}},
-			expected: "Short comment Longer detailed comment Even more details",
-		},
-		{
-			name:     "field with empty lines",
-			field:    Field{Name: "Comment", Value: []string{"First line", "", "Third line"}},
-			expected: "First line  Third line",
-		},
-		{
-			name:     "field with spaces in continuation",
-			field:    Field{Name: "Comment", Value: []string{"First line", " Already indented", "  Double indented"}},
-			expected: "First line  Already indented   Double indented",
-		},
-		{
-			name:     "Hash field (typical multi-entry field)",
-			field:    Field{Name: "Hash", Value: []string{"a1b2c3d4e5f6 12345 path/to/file1.ext", "f6e5d4c3b2a1 67890 path/to/file2.ext"}},
-			expected: "a1b2c3d4e5f6 12345 path/to/file1.ext f6e5d4c3b2a1 67890 path/to/file2.ext",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := tt.field.Unfold()
-			assert.Equal(t, tt.expected, result)
-		})
-	}
 }
 
 func TestRealWorldFixtures(t *testing.T) {
 	fixtures := []struct {
-		name                 string
-		releaseFile          string
-		packagesFile         string
-		expectedRecordCount  int
+		name                string
+		releaseFile         string
+		packagesFile        string
+		expectedRecordCount int
 	}{
 		{
-			name:                 "Spotify",
-			releaseFile:          "spotify-release.gz",
-			packagesFile:         "spotify-packages.gz",
-			expectedRecordCount:  4,
+			name:                "Spotify",
+			releaseFile:         "spotify-release.gz",
+			packagesFile:        "spotify-packages.gz",
+			expectedRecordCount: 4,
 		},
 	}
 
