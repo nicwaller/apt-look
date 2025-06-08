@@ -231,6 +231,37 @@ Fallback attempt:
   https://repo.example.com/ubuntu/dists/jammy/main/binary-amd64/Packages.gz
 ```
 
+### Package Version Sorting
+
+**Debian Version Comparison Complexity:**
+Debian package versions follow a complex format: `[epoch:]upstream-version[-debian-revision]` with intricate sorting rules that differ significantly from simple lexicographic or semantic version sorting.
+
+**Example version comparisons:**
+```
+1:2.4.1-1ubuntu1 > 2.4.1-1ubuntu1  (epoch takes precedence)
+2.4.1-1ubuntu2 > 2.4.1-1ubuntu1    (revision comparison)
+2.4.1+dfsg-1 > 2.4.1-1             (upstream version rules)
+2.4.10-1 > 2.4.2-1                 (numeric parts compared numerically)
+```
+
+**Implementation:**
+- **Use `pault.ag/go/debian/version` package** for accurate Debian version parsing and comparison
+- **Provides `version.Compare()` function** that handles all Debian version comparison rules
+- **Supports epoch, upstream version, and revision parsing** with proper precedence
+- **Essential for commands requiring "newest" package selection** (info, download, search results)
+
+**Usage scenarios:**
+- `apt-look info <source> <package>` - Show details for newest version
+- `apt-look download <source> <package>` - Download newest version
+- `apt-look search <source> <term>` - Sort results by version (newest first)
+- Repository statistics - Identify version distributions
+
+**Integration notes:**
+- Parse version strings from Packages file `Version:` field
+- Sort package slices using `version.Compare()` for consistent ordering
+- Handle version comparison errors gracefully (malformed versions)
+- Cache parsed version objects to avoid repeated parsing overhead
+
 ### Key Considerations
 - Single binary with minimal dependencies
 - Support for western Canada cloud regions and data centres
@@ -298,6 +329,28 @@ Fallback URL (canonical):
 
 Cache key: Content-based hash of decompressed Packages data
 Verification: Downloaded content SHA256 must match abc123def456...
+```
+
+**Package version sorting example:**
+```go
+// Multiple versions of same package found across components/architectures
+packages := []Package{
+    {Name: "golang-1.21", Version: "1.21.5-1ubuntu1"},
+    {Name: "golang-1.21", Version: "1:1.21.4-1"},       // epoch 1
+    {Name: "golang-1.21", Version: "1.21.5-1ubuntu2"},
+    {Name: "golang-1.21", Version: "1.21.10-1"},        // 10 > 5 numerically
+}
+
+// Sort by version using Debian comparison rules
+sort.Slice(packages, func(i, j int) bool {
+    return version.Compare(packages[i].Version, packages[j].Version) > 0
+})
+
+// Result (newest first):
+// 1:1.21.4-1 (epoch wins despite lower number)
+// 1.21.10-1  (numeric comparison: 10 > 5)
+// 1.21.5-1ubuntu2 (revision: ubuntu2 > ubuntu1)
+// 1.21.5-1ubuntu1
 ```
 
 ## Future Considerations
