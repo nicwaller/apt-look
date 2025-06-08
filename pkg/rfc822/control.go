@@ -23,6 +23,17 @@ func (f Field) GoString() string {
 	return fmt.Sprintf("rfc822.Field{Name: %q, Value: %q}", f.Name, f.Value)
 }
 
+// Unfold returns the field value as a single logical line according to RFC822 unfolding rules
+// CRLF immediately followed by LWSP-char is replaced with the LWSP-char (space).
+func (f Field) Unfold() string {
+	if len(f.Value) == 0 {
+		return ""
+	}
+
+	// Join all lines with a single space, effectively "unfolding" the field
+	return strings.Join(f.Value, " ")
+}
+
 // Record represents a single record (paragraph) in an RFC822-style message
 // Fields are stored in a slice to preserve the original ordering for round-trip conversion
 type Record []Field

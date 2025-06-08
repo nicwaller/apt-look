@@ -31,6 +31,7 @@ A Go package for parsing RFC822-style messages, including APT repository Release
 - **`Record.Has(field string)`**: Check if field exists (case-insensitive)
 - **`Record.Fields()`**: List all field names in order
 - **`Record.String()`**: Convert record back to RFC822-style format
+- **`Field.Unfold()`**: Convert field value to single logical line according to RFC822 unfolding rules
 
 ### Validation
 

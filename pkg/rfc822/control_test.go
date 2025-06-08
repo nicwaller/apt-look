@@ -265,6 +265,57 @@ func TestFieldStringMethods(t *testing.T) {
 	assert.Equal(t, expectedMultilineGoString, multilineField.GoString())
 }
 
+func TestFieldUnfold(t *testing.T) {
+	tests := []struct {
+		name     string
+		field    Field
+		expected string
+	}{
+		{
+			name:     "empty field",
+			field:    Field{Name: "Package", Value: []string{}},
+			expected: "",
+		},
+		{
+			name:     "single line field",
+			field:    Field{Name: "Package", Value: []string{"test-package"}},
+			expected: "test-package",
+		},
+		{
+			name:     "two line field",
+			field:    Field{Name: "Description", Value: []string{"Short description", "Longer detailed description"}},
+			expected: "Short description Longer detailed description",
+		},
+		{
+			name:     "three line field",
+			field:    Field{Name: "Description", Value: []string{"Short description", "Longer detailed description", "Even more details"}},
+			expected: "Short description Longer detailed description Even more details",
+		},
+		{
+			name:     "field with empty lines",
+			field:    Field{Name: "Description", Value: []string{"First line", "", "Third line"}},
+			expected: "First line  Third line",
+		},
+		{
+			name:     "field with spaces in continuation",
+			field:    Field{Name: "Description", Value: []string{"First line", " Already indented", "  Double indented"}},
+			expected: "First line  Already indented   Double indented",
+		},
+		{
+			name:     "MD5Sum field (typical hash field)",
+			field:    Field{Name: "MD5Sum", Value: []string{"a1b2c3d4e5f6 12345 main/binary-amd64/package.deb", "f6e5d4c3b2a1 67890 main/binary-amd64/other.deb"}},
+			expected: "a1b2c3d4e5f6 12345 main/binary-amd64/package.deb f6e5d4c3b2a1 67890 main/binary-amd64/other.deb",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.field.Unfold()
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
 func TestRepositoryFixtures(t *testing.T) {
 	fixtures := []struct {
 		name                 string
