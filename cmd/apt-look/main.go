@@ -3,7 +3,6 @@ package main
 import (
 	"compress/gzip"
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/rs/zerolog/log"
 	"net/url"
@@ -77,7 +76,15 @@ total size, breakdown by component, and other metadata.`,
   apt-look stats /etc/apt/sources.list --format=json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		source := args[0]
-		return runStats(source, options.format)
+
+		// TODO: how to share this among all subcommands?
+		// Parse source input
+		sources, err := parseSourceInput(source)
+		if err != nil {
+			return fmt.Errorf("failed to parse source: %w", err)
+		}
+
+		return runStats(sources, options.format)
 	},
 }
 
@@ -124,7 +131,7 @@ func init() {
 
 	// Add validation for format flag
 	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
-		validFormats := []string{"text", "json", "tsv", "raw"}
+		validFormats := []string{"text", "json", "tsv", "prom", "raw"}
 		for _, validFormat := range validFormats {
 			if options.format == validFormat {
 				return nil
@@ -140,6 +147,14 @@ func init() {
 	rootCmd.AddCommand(statsCmd)
 	rootCmd.AddCommand(downloadCmd)
 	rootCmd.AddCommand(searchCmd)
+}
+
+func loadTransports() apttransport.Registry {
+	r := apttransport.NewRegistry()
+	r.Register(apttransport.NewHTTPTransport())
+	r.Register(apttransport.NewFileTransport())
+	// TODO: on Debian systems, register transports for all available plugins
+	return r
 }
 
 // Implementation functions (stubs for demonstration)
@@ -168,58 +183,6 @@ func runInfo(source, packageName, format string) error {
 	// 3. Formatting according to --format flag
 
 	return nil
-}
-
-// RepositoryStats holds statistics about a repository
-type RepositoryStats struct {
-	Repository struct {
-		Origin        string    `json:"origin,omitempty"`
-		Label         string    `json:"label,omitempty"`
-		Suite         string    `json:"suite,omitempty"`
-		Codename      string    `json:"codename,omitempty"`
-		Date          time.Time `json:"date"`
-		Architectures []string  `json:"architectures"`
-		Components    []string  `json:"components"`
-	} `json:"repository"`
-	
-	Packages struct {
-		Total           int   `json:"total"`
-		TotalSize       int64 `json:"total_size_bytes"`
-		TotalSizeMB     int64 `json:"total_size_mb"`
-		ByArchitecture  map[string]int `json:"by_architecture"`
-		ByComponent     map[string]int `json:"by_component"`
-		BySection       map[string]int `json:"by_section"`
-		ByPriority      map[string]int `json:"by_priority"`
-	} `json:"packages"`
-}
-
-func runStats(source, format string) error {
-	log.Info().Msgf("Getting statistics for: %s", source)
-
-	// Parse source input
-	sources, err := parseSourceInput(source)
-	if err != nil {
-		return fmt.Errorf("failed to parse source: %w", err)
-	}
-
-	if len(sources) == 0 {
-		return fmt.Errorf("no enabled sources found")
-	}
-
-	// Use first enabled source for stats
-	sourceEntry := sources[0]
-	if !sourceEntry.Enabled {
-		return fmt.Errorf("source is disabled")
-	}
-
-	// Calculate statistics
-	stats, err := calculateRepositoryStats(sourceEntry)
-	if err != nil {
-		return fmt.Errorf("failed to calculate statistics: %w", err)
-	}
-
-	// Format and output results
-	return outputStats(stats, format)
 }
 
 func parseSourceInput(source string) ([]aptrepo.SourceEntry, error) {
@@ -251,74 +214,6 @@ func parseSourceInput(source string) ([]aptrepo.SourceEntry, error) {
 	return entries, nil
 }
 
-func calculateRepositoryStats(source aptrepo.SourceEntry) (*RepositoryStats, error) {
-	stats := &RepositoryStats{}
-	
-	// Initialize transport
-	transport := apttransport.NewHTTPTransport()
-
-	// Fetch Release file
-	releaseURL := strings.TrimSuffix(source.URI, "/") + "/dists/" + source.Distribution + "/Release"
-	parsedURL, err := url.Parse(releaseURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse Release URL %s: %w", releaseURL, err)
-	}
-	
-	ctx := context.Background()
-	resp, err := transport.Acquire(ctx, &apttransport.AcquireRequest{
-		URI:     parsedURL,
-		Timeout: 30 * time.Second,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch Release file from %s: %w", releaseURL, err)
-	}
-	defer resp.Content.Close()
-
-	release, err := aptrepo.ParseRelease(resp.Content)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse Release file: %w", err)
-	}
-
-	// Fill repository info from Release file
-	stats.Repository.Origin = release.Origin
-	stats.Repository.Label = release.Label
-	stats.Repository.Suite = release.Suite
-	stats.Repository.Codename = release.Codename
-	stats.Repository.Date = release.Date
-	stats.Repository.Architectures = release.Architectures
-	stats.Repository.Components = release.Components
-
-	// Initialize counters
-	stats.Packages.ByArchitecture = make(map[string]int)
-	stats.Packages.ByComponent = make(map[string]int)
-	stats.Packages.BySection = make(map[string]int)
-	stats.Packages.ByPriority = make(map[string]int)
-
-	// Fetch and parse Packages files for each component/architecture
-	for _, component := range source.Components {
-		if component == "" {
-			continue
-		}
-		
-		for _, arch := range release.Architectures {
-			if arch == "source" {
-				continue // Skip source architecture for binary package stats
-			}
-
-			err := processPackagesFile(transport, source, component, arch, stats)
-			if err != nil {
-				log.Warn().Err(err).Msgf("Failed to process packages for %s/%s", component, arch)
-				continue
-			}
-		}
-	}
-
-	// Calculate derived statistics
-	stats.Packages.TotalSizeMB = stats.Packages.TotalSize / (1024 * 1024)
-
-	return stats, nil
-}
-
 func processPackagesFile(transport apttransport.Transport, source aptrepo.SourceEntry, component, arch string, stats *RepositoryStats) error {
 	// Try different possible Packages file locations
 	possiblePaths := []string{
@@ -328,12 +223,12 @@ func processPackagesFile(transport apttransport.Transport, source aptrepo.Source
 
 	for _, path := range possiblePaths {
 		packagesURL := strings.TrimSuffix(source.URI, "/") + path
-		
+
 		parsedURL, err := url.Parse(packagesURL)
 		if err != nil {
 			continue // Try next path
 		}
-		
+
 		ctx := context.Background()
 		resp, err := transport.Acquire(ctx, &apttransport.AcquireRequest{
 			URI:     parsedURL,
@@ -392,122 +287,6 @@ func processPackagesFile(transport apttransport.Transport, source aptrepo.Source
 	}
 
 	return fmt.Errorf("could not fetch Packages file for %s/%s", component, arch)
-}
-
-func outputStats(stats *RepositoryStats, format string) error {
-	switch format {
-	case "json":
-		encoder := json.NewEncoder(os.Stdout)
-		encoder.SetIndent("", "  ")
-		return encoder.Encode(stats)
-
-	case "tsv":
-		return outputStatsTSV(stats)
-
-	case "raw":
-		return outputStatsRaw(stats)
-
-	case "text":
-		fallthrough
-	default:
-		return outputStatsText(stats)
-	}
-}
-
-func outputStatsText(stats *RepositoryStats) error {
-	fmt.Printf("Repository Statistics\n")
-	fmt.Printf("====================\n\n")
-
-	// Repository information
-	fmt.Printf("Repository Information:\n")
-	if stats.Repository.Origin != "" {
-		fmt.Printf("  Origin: %s\n", stats.Repository.Origin)
-	}
-	if stats.Repository.Label != "" {
-		fmt.Printf("  Label: %s\n", stats.Repository.Label)
-	}
-	if stats.Repository.Suite != "" {
-		fmt.Printf("  Suite: %s\n", stats.Repository.Suite)
-	}
-	if stats.Repository.Codename != "" {
-		fmt.Printf("  Codename: %s\n", stats.Repository.Codename)
-	}
-	fmt.Printf("  Date: %s\n", stats.Repository.Date.Format("2006-01-02 15:04:05 MST"))
-	fmt.Printf("  Architectures: %s\n", strings.Join(stats.Repository.Architectures, ", "))
-	fmt.Printf("  Components: %s\n", strings.Join(stats.Repository.Components, ", "))
-
-	// Package statistics
-	fmt.Printf("\nPackage Statistics:\n")
-	fmt.Printf("  Total Packages: %d\n", stats.Packages.Total)
-	fmt.Printf("  Total Size: %d bytes (%.1f MB)\n", stats.Packages.TotalSize, float64(stats.Packages.TotalSize)/(1024*1024))
-
-	if len(stats.Packages.ByArchitecture) > 0 {
-		fmt.Printf("\n  By Architecture:\n")
-		for arch, count := range stats.Packages.ByArchitecture {
-			fmt.Printf("    %s: %d packages\n", arch, count)
-		}
-	}
-
-	if len(stats.Packages.ByComponent) > 0 {
-		fmt.Printf("\n  By Component:\n")
-		for component, count := range stats.Packages.ByComponent {
-			fmt.Printf("    %s: %d packages\n", component, count)
-		}
-	}
-
-	if len(stats.Packages.BySection) > 0 {
-		fmt.Printf("\n  By Section:\n")
-		for section, count := range stats.Packages.BySection {
-			fmt.Printf("    %s: %d packages\n", section, count)
-		}
-	}
-
-	if len(stats.Packages.ByPriority) > 0 {
-		fmt.Printf("\n  By Priority:\n")
-		for priority, count := range stats.Packages.ByPriority {
-			fmt.Printf("    %s: %d packages\n", priority, count)
-		}
-	}
-
-	return nil
-}
-
-func outputStatsTSV(stats *RepositoryStats) error {
-	fmt.Printf("field\tvalue\n")
-	fmt.Printf("origin\t%s\n", stats.Repository.Origin)
-	fmt.Printf("label\t%s\n", stats.Repository.Label)
-	fmt.Printf("suite\t%s\n", stats.Repository.Suite)
-	fmt.Printf("codename\t%s\n", stats.Repository.Codename)
-	fmt.Printf("date\t%s\n", stats.Repository.Date.Format("2006-01-02T15:04:05Z07:00"))
-	fmt.Printf("architectures\t%s\n", strings.Join(stats.Repository.Architectures, ","))
-	fmt.Printf("components\t%s\n", strings.Join(stats.Repository.Components, ","))
-	fmt.Printf("total_packages\t%d\n", stats.Packages.Total)
-	fmt.Printf("total_size_bytes\t%d\n", stats.Packages.TotalSize)
-	fmt.Printf("total_size_mb\t%d\n", stats.Packages.TotalSizeMB)
-
-	for arch, count := range stats.Packages.ByArchitecture {
-		fmt.Printf("arch_%s\t%d\n", arch, count)
-	}
-
-	for component, count := range stats.Packages.ByComponent {
-		fmt.Printf("component_%s\t%d\n", component, count)
-	}
-
-	return nil
-}
-
-func outputStatsRaw(stats *RepositoryStats) error {
-	fmt.Printf("Origin: %s\n", stats.Repository.Origin)
-	fmt.Printf("Label: %s\n", stats.Repository.Label)
-	fmt.Printf("Suite: %s\n", stats.Repository.Suite)
-	fmt.Printf("Codename: %s\n", stats.Repository.Codename)
-	fmt.Printf("Date: %s\n", stats.Repository.Date.Format("Mon, 02 Jan 2006 15:04:05 MST"))
-	fmt.Printf("Architectures: %s\n", strings.Join(stats.Repository.Architectures, " "))
-	fmt.Printf("Components: %s\n", strings.Join(stats.Repository.Components, " "))
-	fmt.Printf("Total-Packages: %d\n", stats.Packages.Total)
-	fmt.Printf("Total-Size: %d\n", stats.Packages.TotalSize)
-
-	return nil
 }
 
 func runDownload(source, packageName, outputPath string) error {
