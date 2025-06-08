@@ -4,14 +4,15 @@ import (
 	"compress/gzip"
 	"context"
 	"fmt"
+	"github.com/nicwaller/apt-look/pkg/aptrepo"
 	"github.com/rs/zerolog/log"
 	"net/url"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/nicwaller/apt-look/pkg/aptrepo"
 	"github.com/nicwaller/apt-look/pkg/apttransport"
+	"github.com/nicwaller/apt-look/pkg/deb822"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 )
@@ -253,7 +254,7 @@ func processPackagesFile(transport apttransport.Transport, source aptrepo.Source
 
 		// Parse packages and update stats
 		packageCount := 0
-		for pkg, err := range aptrepo.ParsePackages(reader) {
+		for pkg, err := range deb822.ParsePackages(reader) {
 			if err != nil {
 				log.Warn().Err(err).Msg("Error parsing package")
 				continue

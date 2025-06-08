@@ -1,4 +1,4 @@
-package aptrepo
+package deb822
 
 import (
 	"compress/gzip"
@@ -206,7 +206,7 @@ Size: 1000`,
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			packages := ParsePackages(strings.NewReader(tc.input))
-			
+
 			var pkg *Package
 			var err error
 			for p, e := range packages {
@@ -214,7 +214,7 @@ Size: 1000`,
 				err = e
 				break
 			}
-			
+
 			if tc.expectErr {
 				assert.Error(t, err)
 				if tc.errMsg != "" {
@@ -249,21 +249,21 @@ Provides: virtual-package`
 	require.NotNil(t, pkg)
 
 	deps := pkg.GetDependencies()
-	
+
 	// Test dependency parsing
 	assert.Contains(t, deps, "depends")
 	assert.Contains(t, deps["depends"], "libc6 (>= 2.30)")
 	assert.Contains(t, deps["depends"], "libssl1.1")
-	
+
 	assert.Contains(t, deps, "recommends")
 	assert.Contains(t, deps["recommends"], "curl | wget")
-	
+
 	assert.Contains(t, deps, "suggests")
 	assert.Contains(t, deps["suggests"], "documentation")
-	
+
 	assert.Contains(t, deps, "conflicts")
 	assert.Contains(t, deps["conflicts"], "old-package")
-	
+
 	assert.Contains(t, deps, "provides")
 	assert.Contains(t, deps["provides"], "virtual-package")
 }
@@ -290,26 +290,26 @@ func TestPackageJSONSerialization(t *testing.T) {
 	// Marshal to JSON
 	jsonData, err := json.Marshal(original)
 	require.NoError(t, err)
-	
+
 	// Verify JSON contains expected fields
 	var jsonMap map[string]interface{}
 	err = json.Unmarshal(jsonData, &jsonMap)
 	require.NoError(t, err)
-	
+
 	assert.Equal(t, "spotify-client", jsonMap["package"])
 	assert.Equal(t, "amd64", jsonMap["architecture"])
 	assert.Contains(t, jsonMap, "filename")
 	assert.Contains(t, jsonMap, "size")
 	assert.Contains(t, jsonMap, "sha256")
-	
+
 	// Verify the record field is excluded
 	assert.NotContains(t, jsonMap, "record")
-	
+
 	// Unmarshal back to struct
 	var unmarshaled Package
 	err = json.Unmarshal(jsonData, &unmarshaled)
 	require.NoError(t, err)
-	
+
 	// Verify key fields match (note: record field won't be preserved)
 	assert.Equal(t, original.Package, unmarshaled.Package)
 	assert.Equal(t, original.Architecture, unmarshaled.Architecture)
@@ -317,7 +317,7 @@ func TestPackageJSONSerialization(t *testing.T) {
 	assert.Equal(t, original.Filename, unmarshaled.Filename)
 	assert.Equal(t, original.Size, unmarshaled.Size)
 	assert.Equal(t, original.SHA256, unmarshaled.SHA256)
-	
+
 	t.Logf("JSON output: %s", string(jsonData))
 }
 
@@ -385,7 +385,7 @@ func TestAllPackagesFiles(t *testing.T) {
 				assert.Greater(t, pkg.Size, int64(0), "%s package %d should have positive Size", fileName, packageCount+1)
 
 				packageCount++
-				
+
 				// For performance, limit testing to first 50 packages per file
 				if packageCount >= 50 {
 					break

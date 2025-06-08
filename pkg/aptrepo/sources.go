@@ -14,8 +14,8 @@ import (
 type SourceType string
 
 const (
-	SourceTypeDeb    SourceType = "deb"     // Binary packages
-	SourceTypeSrc    SourceType = "deb-src" // Source packages
+	SourceTypeDeb     SourceType = "deb"     // Binary packages
+	SourceTypeSrc     SourceType = "deb-src" // Source packages
 	SourceTypeUnknown SourceType = "unknown"
 )
 
@@ -23,25 +23,25 @@ const (
 type SourceEntry struct {
 	// Entry type (deb or deb-src)
 	Type SourceType `json:"type"`
-	
+
 	// Repository URI
 	URI string `json:"uri"`
 	
 	// Distribution/Suite (e.g., "stable", "jammy", "bookworm")
 	Distribution string `json:"distribution"`
-	
+
 	// Components (e.g., "main", "contrib", "non-free")
 	Components []string `json:"components,omitempty"`
-	
+
 	// Options in square brackets (e.g., arch=amd64, trusted=yes)
 	Options map[string]string `json:"options,omitempty"`
-	
+
 	// Whether this entry is enabled (true) or commented out (false)
 	Enabled bool `json:"enabled"`
-	
+
 	// Original line text for reference
 	OriginalLine string `json:"original_line,omitempty"`
-	
+
 	// Line number in the source file
 	LineNumber int `json:"line_number,omitempty"`
 }
@@ -56,32 +56,32 @@ func ParseSources(r io.Reader) iter.Seq2[*SourceEntry, error] {
 	return func(yield func(*SourceEntry, error) bool) {
 		scanner := bufio.NewScanner(r)
 		lineNumber := 0
-		
+
 		for scanner.Scan() {
 			lineNumber++
 			line := scanner.Text()
-			
+
 			// Skip empty lines
 			if strings.TrimSpace(line) == "" {
 				continue
 			}
-			
+
 			entry, err := parseSourceLine(line, lineNumber)
 			if err != nil {
 				yield(nil, fmt.Errorf("line %d: %w", lineNumber, err))
 				return
 			}
-			
+
 			// Skip lines that are just comments
 			if entry == nil {
 				continue
 			}
-			
+
 			if !yield(entry, nil) {
 				return // Stop iteration if yield returns false
 			}
 		}
-		
+
 		if err := scanner.Err(); err != nil {
 			yield(nil, fmt.Errorf("scanner error: %w", err))
 		}
@@ -91,14 +91,14 @@ func ParseSources(r io.Reader) iter.Seq2[*SourceEntry, error] {
 // ParseSourcesList parses an entire sources.list file into a SourcesList structure
 func ParseSourcesList(r io.Reader) (*SourcesList, error) {
 	var entries []SourceEntry
-	
+
 	for entry, err := range ParseSources(r) {
 		if err != nil {
 			return nil, err
 		}
 		entries = append(entries, *entry)
 	}
-	
+
 	return &SourcesList{Entries: entries}, nil
 }
 
@@ -106,24 +106,24 @@ func ParseSourcesList(r io.Reader) (*SourcesList, error) {
 func parseSourceLine(line string, lineNumber int) (*SourceEntry, error) {
 	originalLine := line
 	line = strings.TrimSpace(line)
-	
+
 	// Skip empty lines
 	if line == "" {
 		return nil, nil
 	}
-	
+
 	// Check if line is commented out
 	enabled := true
 	if strings.HasPrefix(line, "#") {
 		enabled = false
 		line = strings.TrimSpace(line[1:]) // Remove # and trim
-		
+
 		// If it's just a comment without source info, skip it
 		if line == "" || !isSourceLine(line) {
 			return nil, nil
 		}
 	}
-	
+
 	// Parse options in square brackets (they come after the source type)
 	options := make(map[string]string)
 	optionsRegex := regexp.MustCompile(`^(\S+)\s+\[([^\]]+)\]\s*(.*)`)
@@ -133,7 +133,7 @@ func parseSourceLine(line string, lineNumber int) (*SourceEntry, error) {
 		optionsStr := match[2]
 		rest := match[3]
 		line = sourceType + " " + rest // Reconstruct without options
-		
+
 		for _, opt := range strings.Fields(optionsStr) {
 			if parts := strings.SplitN(opt, "=", 2); len(parts) == 2 {
 				options[parts[0]] = parts[1]
@@ -142,7 +142,7 @@ func parseSourceLine(line string, lineNumber int) (*SourceEntry, error) {
 			}
 		}
 	}
-	
+
 	// Split remaining line into fields
 	fields := strings.Fields(line)
 	if len(fields) < 3 {
@@ -152,7 +152,7 @@ func parseSourceLine(line string, lineNumber int) (*SourceEntry, error) {
 			LineNumber:   lineNumber,
 		}, fmt.Errorf("invalid source line format: expected at least 3 fields (type, uri, distribution)")
 	}
-	
+
 	// Parse source type
 	sourceType := parseSourceType(fields[0])
 	if sourceType == SourceTypeUnknown {
@@ -162,7 +162,7 @@ func parseSourceLine(line string, lineNumber int) (*SourceEntry, error) {
 			LineNumber:   lineNumber,
 		}, fmt.Errorf("unknown source type: %s", fields[0])
 	}
-	
+
 	// Parse URI
 	uri := fields[1]
 	if err := validateURI(uri); err != nil {
@@ -174,16 +174,16 @@ func parseSourceLine(line string, lineNumber int) (*SourceEntry, error) {
 			LineNumber:   lineNumber,
 		}, fmt.Errorf("invalid URI: %w", err)
 	}
-	
+
 	// Parse distribution
 	distribution := fields[2]
-	
+
 	// Parse components (remaining fields)
 	var components []string
 	if len(fields) > 3 {
 		components = fields[3:]
 	}
-	
+
 	return &SourceEntry{
 		Type:         sourceType,
 		URI:          uri,
@@ -214,17 +214,17 @@ func validateURI(uri string) error {
 	if uri == "" {
 		return fmt.Errorf("URI cannot be empty")
 	}
-	
+
 	// Handle special cases
 	if uri == "/" {
 		return nil // Root directory is valid for some contexts
 	}
-	
+
 	// Try to parse as URL
 	if _, err := url.Parse(uri); err != nil {
 		return fmt.Errorf("malformed URI: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -234,10 +234,10 @@ func isSourceLine(line string) bool {
 	if len(fields) == 0 {
 		return false
 	}
-	
+
 	// Check if it starts with a known source type (accounting for options)
 	firstField := fields[0]
-	
+
 	// Handle options in square brackets
 	if strings.HasPrefix(firstField, "[") {
 		// Find the actual type after options
@@ -248,7 +248,7 @@ func isSourceLine(line string) bool {
 			}
 		}
 	}
-	
+
 	return parseSourceType(firstField) != SourceTypeUnknown
 }
 
@@ -323,13 +323,13 @@ func (se *SourceEntry) HasOption(key string) bool {
 // String returns a string representation of the source entry in sources.list format
 func (se *SourceEntry) String() string {
 	var parts []string
-	
+
 	// Add comment prefix if disabled
 	prefix := ""
 	if !se.Enabled {
 		prefix = "# "
 	}
-	
+
 	// Add options if present
 	optionsStr := ""
 	if len(se.Options) > 0 {
@@ -343,10 +343,10 @@ func (se *SourceEntry) String() string {
 		}
 		optionsStr = fmt.Sprintf("[%s] ", strings.Join(opts, " "))
 	}
-	
+
 	// Build the line
 	parts = append(parts, string(se.Type), se.URI, se.Distribution)
 	parts = append(parts, se.Components...)
-	
+
 	return fmt.Sprintf("%s%s%s", prefix, optionsStr, strings.Join(parts, " "))
 }

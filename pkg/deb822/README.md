@@ -1,6 +1,74 @@
-# aptrepo
+# deb822
 
 This package provides Go types and parsers for APT repository metadata files, including Release files that describe repository structure, Packages files that contain package metadata, and sources.list files that define repository configurations.
+
+## deb822 file format specification
+
+[deb822](https://manpages.ubuntu.com/manpages/focal/man5/deb822.5.html) is a file format that is foundational to the Debian/APT package ecosystem. It was originally specified for use in `control` files that provide metadata for Debian packages (`.deb` files). The syntax and structure was later reused for `Release` and `Packages` files in Apt repositories. And starting with APT 1.1 in 2016, the deb822 file format is also now being used for source lists.
+
+The official specification is available here:
+
+https://manpages.ubuntu.com/manpages/focal/man5/deb822.5.html
+
+## Relationship with RFC 822
+
+[RFC 822](https://datatracker.ietf.org/doc/html/rfc822) "Standard for the format of ARPA internet text messages" originates from 1982 and defines the message format for email.
+
+Although deb822 borrows several key concepts from RFC 822, it has some key differences. Files using deb822 syntax and structure cannot always be parsed using a strict implementation of RFC 822. Consider these example messages.
+
+### Examples
+
+An RFC 822 email message starts with a sequence of header lines followed by a message body. Note the `Subject` header field is using the folding technique described by RFC 822.
+
+```
+From: user@example.com
+To: recipient@example.com
+Subject: Quarterly Business Review Meeting - Q2 2025 Financial Results
+ and Strategic Planning Session
+Date: Sat, 7 Jun 2025 10:00:00 -0700
+
+This is the message body.
+```
+
+deb822 was originally specified to provide package metadata in a control file. This is a valid message according to RFC822, but the message body is omitted. 
+
+```deb822
+Package: alpha
+Version: 1.0.0-1
+Architecture: amd64
+Description: An example package
+ This is a longer description that continues
+ on multiple lines with proper indentation.
+```
+
+In an Apt repository, the `Release` file reuses deb822 syntax and structure. However, `MD5Sum` and the other hash fields specify different whitespace handling; instead of unfolding the lines according to RFC822, each line should be considered individually. One clue available to the parser is the omission of field value content on the `MD5Sum` line.
+
+```deb822
+Label: Brave Browser
+Codename: stable
+Architectures: amd64 arm64
+Components: main
+MD5Sum:
+ 02fe9a3926ce03cd7c3e2201a26629ef    12617 Contents-amd64
+ d6601756eda716c30a6cc85d732dd800     1127 Contents-amd64.gz
+ 02fe9a3926ce03cd7c3e2201a26629ef    12617 Contents-arm64
+ d6601756eda716c30a6cc85d732dd800     1127 Contents-arm64.gz
+```
+
+In an Apt repository, the `Packages` file can be interpreted as a sequence of RFC822 header blocks.
+
+```deb822
+Package: alpha
+Version: 1.0.0-1
+Architecture: amd64
+Description: An example package
+ This is a longer description that continues
+ on multiple lines with proper indentation.
+
+Package: bravo
+Version: 1.0.0-1
+Architecture: amd64
+```
 
 ## Features
 

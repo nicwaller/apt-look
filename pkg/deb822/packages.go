@@ -1,4 +1,4 @@
-package aptrepo
+package deb822
 
 import (
 	"fmt"
@@ -24,9 +24,9 @@ type Package struct {
 	Description  string `json:"description,omitempty"`
 
 	// Additional hash fields
-	MD5sum  string `json:"md5sum,omitempty"`
-	SHA1    string `json:"sha1,omitempty"`
-	SHA512  string `json:"sha512,omitempty"`
+	MD5sum string `json:"md5sum,omitempty"`
+	SHA1   string `json:"sha1,omitempty"`
+	SHA512 string `json:"sha512,omitempty"`
 
 	// Control fields (must match .deb control file if present)
 	Priority      string `json:"priority,omitempty"`
@@ -35,17 +35,17 @@ type Package struct {
 	Maintainer    string `json:"maintainer,omitempty"`
 	InstalledSize int64  `json:"installed_size,omitempty"`
 	Homepage      string `json:"homepage,omitempty"`
-	
+
 	// Dependency fields
-	Depends     string `json:"depends,omitempty"`
-	PreDepends  string `json:"pre_depends,omitempty"`
-	Recommends  string `json:"recommends,omitempty"`
-	Suggests    string `json:"suggests,omitempty"`
-	Enhances    string `json:"enhances,omitempty"`
-	Breaks      string `json:"breaks,omitempty"`
-	Conflicts   string `json:"conflicts,omitempty"`
-	Provides    string `json:"provides,omitempty"`
-	Replaces    string `json:"replaces,omitempty"`
+	Depends    string `json:"depends,omitempty"`
+	PreDepends string `json:"pre_depends,omitempty"`
+	Recommends string `json:"recommends,omitempty"`
+	Suggests   string `json:"suggests,omitempty"`
+	Enhances   string `json:"enhances,omitempty"`
+	Breaks     string `json:"breaks,omitempty"`
+	Conflicts  string `json:"conflicts,omitempty"`
+	Provides   string `json:"provides,omitempty"`
+	Replaces   string `json:"replaces,omitempty"`
 
 	// Multi-architecture support
 	MultiArch string `json:"multi_arch,omitempty"`
@@ -66,9 +66,9 @@ type Package struct {
 	Vendor  string `json:"vendor,omitempty"`
 
 	// Build information
-	BuildDepends     string `json:"build_depends,omitempty"`
+	BuildDepends      string `json:"build_depends,omitempty"`
 	BuildDependsIndep string `json:"build_depends_indep,omitempty"`
-	BuildConflicts   string `json:"build_conflicts,omitempty"`
+	BuildConflicts    string `json:"build_conflicts,omitempty"`
 
 	// Raw RFC822 record for access to non-standard fields
 	record rfc822.Record `json:"-"`
@@ -77,20 +77,20 @@ type Package struct {
 // ParsePackages parses an APT Packages file and returns an iterator over Package entries
 func ParsePackages(r io.Reader) iter.Seq2[*Package, error] {
 	parser := rfc822.NewParser()
-	
+
 	return func(yield func(*Package, error) bool) {
 		for record, err := range parser.ParseRecords(r) {
 			if err != nil {
 				yield(nil, fmt.Errorf("parsing packages file: %w", err))
 				return
 			}
-			
+
 			pkg := &Package{record: record}
 			if err := pkg.parseFields(); err != nil {
 				yield(nil, fmt.Errorf("parsing package fields: %w", err))
 				return
 			}
-			
+
 			if !yield(pkg, nil) {
 				return // Stop iteration if yield returns false
 			}
@@ -210,7 +210,7 @@ func (p *Package) Fields() []string {
 // GetDependencies parses and returns dependency relationships as structured data
 func (p *Package) GetDependencies() map[string][]string {
 	deps := make(map[string][]string)
-	
+
 	if p.Depends != "" {
 		deps["depends"] = parseDependencyList(p.Depends)
 	}
@@ -238,7 +238,7 @@ func (p *Package) GetDependencies() map[string][]string {
 	if p.Replaces != "" {
 		deps["replaces"] = parseDependencyList(p.Replaces)
 	}
-	
+
 	return deps
 }
 

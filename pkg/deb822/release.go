@@ -1,4 +1,4 @@
-package aptrepo
+package deb822
 
 import (
 	"fmt"
@@ -20,7 +20,7 @@ type HashEntry struct {
 // Release represents an APT Release file with all standardized fields
 type Release struct {
 	// Mandatory fields
-	Suite         string      `json:"suite,omitempty"`         // Suite or Codename (at least one required)
+	Suite         string      `json:"suite,omitempty"` // Suite or Codename (at least one required)
 	Codename      string      `json:"codename,omitempty"`
 	Architectures []string    `json:"architectures"`
 	Components    []string    `json:"components"`
@@ -28,18 +28,18 @@ type Release struct {
 	SHA256        []HashEntry `json:"sha256,omitempty"`
 
 	// Optional metadata fields
-	Origin                        string     `json:"origin,omitempty"`
-	Label                         string     `json:"label,omitempty"`
-	Version                       string     `json:"version,omitempty"`
-	ValidUntil                    *time.Time `json:"valid_until,omitempty"`
-	NotAutomatic                  bool       `json:"not_automatic,omitempty"`
-	ButAutomaticUpgrades          bool       `json:"but_automatic_upgrades,omitempty"`
-	AcquireByHash                 bool       `json:"acquire_by_hash,omitempty"`
-	SignedBy                      []string   `json:"signed_by,omitempty"`
-	PackagesRequireAuthorization  string     `json:"packages_require_authorization,omitempty"`
-	Changelogs                    string     `json:"changelogs,omitempty"`
-	Snapshots                     string     `json:"snapshots,omitempty"`
-	NoSupportForArchitectureAll   bool       `json:"no_support_for_architecture_all,omitempty"`
+	Origin                       string     `json:"origin,omitempty"`
+	Label                        string     `json:"label,omitempty"`
+	Version                      string     `json:"version,omitempty"`
+	ValidUntil                   *time.Time `json:"valid_until,omitempty"`
+	NotAutomatic                 bool       `json:"not_automatic,omitempty"`
+	ButAutomaticUpgrades         bool       `json:"but_automatic_upgrades,omitempty"`
+	AcquireByHash                bool       `json:"acquire_by_hash,omitempty"`
+	SignedBy                     []string   `json:"signed_by,omitempty"`
+	PackagesRequireAuthorization string     `json:"packages_require_authorization,omitempty"`
+	Changelogs                   string     `json:"changelogs,omitempty"`
+	Snapshots                    string     `json:"snapshots,omitempty"`
+	NoSupportForArchitectureAll  bool       `json:"no_support_for_architecture_all,omitempty"`
 
 	// Legacy hash fields (not for security)
 	MD5Sum []HashEntry `json:"md5sum,omitempty"`
@@ -52,7 +52,7 @@ type Release struct {
 // ParseRelease parses an APT Release file from the given reader
 func ParseRelease(r io.Reader) (*Release, error) {
 	parser := rfc822.NewParser()
-	
+
 	var record rfc822.Record
 	found := false
 	for rec, err := range parser.ParseRecords(r) {
@@ -63,7 +63,7 @@ func ParseRelease(r io.Reader) (*Release, error) {
 		found = true
 		break // Release files contain only one record
 	}
-	
+
 	if !found {
 		return nil, fmt.Errorf("no records found in release file")
 	}
@@ -81,7 +81,7 @@ func (r *Release) parseFields() error {
 	// Parse mandatory/important fields
 	r.Suite = r.record.Get("Suite")
 	r.Codename = r.record.Get("Codename")
-	
+
 	// At least one of Suite or Codename must be present
 	if r.Suite == "" && r.Codename == "" {
 		return fmt.Errorf("release file must have either Suite or Codename field")
@@ -178,30 +178,30 @@ func (r *Release) parseFields() error {
 // Each line format: "hash size path"
 func parseHashEntries(lines []string) ([]HashEntry, error) {
 	var entries []HashEntry
-	
+
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
-		
+
 		parts := strings.Fields(line)
 		if len(parts) != 3 {
 			return nil, fmt.Errorf("invalid hash entry format: %q (expected 3 fields)", line)
 		}
-		
+
 		size, err := strconv.ParseInt(parts[1], 10, 64)
 		if err != nil {
 			return nil, fmt.Errorf("invalid size in hash entry %q: %w", line, err)
 		}
-		
+
 		entries = append(entries, HashEntry{
 			Hash: parts[0],
 			Size: size,
 			Path: parts[2],
 		})
 	}
-	
+
 	return entries, nil
 }
 
@@ -211,32 +211,32 @@ func parseRFC1123(dateStr string) (time.Time, error) {
 	if t, err := time.Parse(time.RFC1123, dateStr); err == nil {
 		return t, nil
 	}
-	
+
 	// Try with single-digit day (some repos use this): "Mon, 2 Jan 2006 15:04:05 MST"
 	if t, err := time.Parse("Mon, 2 Jan 2006 15:04:05 MST", dateStr); err == nil {
 		return t, nil
 	}
-	
+
 	// Try without day of week (some old repos): "02 Jan 2006 15:04:05 MST"
 	if t, err := time.Parse("02 Jan 2006 15:04:05 MST", dateStr); err == nil {
 		return t, nil
 	}
-	
+
 	// Try with single-digit day without weekday: "2 Jan 2006 15:04:05 MST"
 	if t, err := time.Parse("2 Jan 2006 15:04:05 MST", dateStr); err == nil {
 		return t, nil
 	}
-	
+
 	// Try non-standard format used by some repos: "Mon Jan 2 15:04:05 2006"
 	if t, err := time.Parse("Mon Jan 2 15:04:05 2006", dateStr); err == nil {
 		return t, nil
 	}
-	
+
 	// Try ANSIC format: "Mon Jan _2 15:04:05 2006" (with padding space)
 	if t, err := time.Parse(time.ANSIC, dateStr); err == nil {
 		return t, nil
 	}
-	
+
 	return time.Time{}, fmt.Errorf("unable to parse date %q with any known APT date format", dateStr)
 }
 

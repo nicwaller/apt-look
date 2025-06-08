@@ -1,4 +1,4 @@
-package aptrepo
+package deb822
 
 import (
 	"compress/gzip"
@@ -142,7 +142,7 @@ func TestHashEntryParsing(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			result, err := parseHashEntries(tc.lines)
-			
+
 			if tc.hasError {
 				assert.Error(t, err)
 			} else {
@@ -224,12 +224,12 @@ func TestReleaseJSONSerialization(t *testing.T) {
 	// Marshal to JSON
 	jsonData, err := json.Marshal(original)
 	require.NoError(t, err)
-	
+
 	// Verify JSON contains expected fields
 	var jsonMap map[string]interface{}
 	err = json.Unmarshal(jsonData, &jsonMap)
 	require.NoError(t, err)
-	
+
 	assert.Equal(t, "stable", jsonMap["suite"])
 	assert.Equal(t, "stable", jsonMap["codename"])
 	assert.Equal(t, "Spotify LTD", jsonMap["origin"])
@@ -237,15 +237,15 @@ func TestReleaseJSONSerialization(t *testing.T) {
 	assert.Contains(t, jsonMap, "architectures")
 	assert.Contains(t, jsonMap, "date")
 	assert.Contains(t, jsonMap, "sha256")
-	
+
 	// Verify the record field is excluded
 	assert.NotContains(t, jsonMap, "record")
-	
+
 	// Unmarshal back to struct
 	var unmarshaled Release
 	err = json.Unmarshal(jsonData, &unmarshaled)
 	require.NoError(t, err)
-	
+
 	// Verify key fields match (note: record field won't be preserved)
 	assert.Equal(t, original.Suite, unmarshaled.Suite)
 	assert.Equal(t, original.Codename, unmarshaled.Codename)
@@ -255,7 +255,7 @@ func TestReleaseJSONSerialization(t *testing.T) {
 	assert.Equal(t, original.Components, unmarshaled.Components)
 	assert.Equal(t, original.Date.Unix(), unmarshaled.Date.Unix()) // Compare Unix timestamps
 	assert.Equal(t, len(original.SHA256), len(unmarshaled.SHA256))
-	
+
 	t.Logf("JSON output: %s", string(jsonData))
 }
 
@@ -286,10 +286,10 @@ func TestAllReleaseFiles(t *testing.T) {
 			assert.False(t, release.Date.IsZero(), "%s should have a valid date", fileName)
 
 			// Should have at least one of Suite or Codename
-			assert.True(t, release.Suite != "" || release.Codename != "", 
+			assert.True(t, release.Suite != "" || release.Codename != "",
 				"%s should have Suite or Codename", fileName)
 
-			t.Logf("%s: parsed successfully (%d SHA256 entries)", 
+			t.Logf("%s: parsed successfully (%d SHA256 entries)",
 				fileName, len(release.SHA256))
 		})
 	}

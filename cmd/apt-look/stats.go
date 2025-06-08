@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/nicwaller/apt-look/pkg/aptrepo"
 	"github.com/nicwaller/apt-look/pkg/apttransport"
+	"github.com/nicwaller/apt-look/pkg/deb822"
 	"github.com/rs/zerolog/log"
 	"net/url"
 	"os"
@@ -18,7 +19,7 @@ func runStats(sources []aptrepo.SourceEntry, format string) error {
 		return fmt.Errorf("expected 1 source, got %d", len(sources))
 	}
 	source := sources[0]
-	log.Info().Msgf("Getting statistics for: %s", source)
+	log.Info().Msgf("Getting statistics for: %s", source.String())
 
 	if !source.Enabled {
 		return fmt.Errorf("source is disabled")
@@ -82,7 +83,7 @@ func calculateRepositoryStats(source aptrepo.SourceEntry) (*RepositoryStats, err
 	}
 	defer resp.Content.Close()
 
-	release, err := aptrepo.ParseRelease(resp.Content)
+	release, err := deb822.ParseRelease(resp.Content)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse Release file: %w", err)
 	}
