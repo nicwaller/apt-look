@@ -138,6 +138,19 @@ broken references, and other repository integrity issues.`,
 	},
 }
 
+// Purge-cache command
+var purgeCacheCmd = &cobra.Command{
+	Use:   "purge-cache",
+	Short: "Remove all cached repository files",
+	Long: `Remove all cached repository files from the apt-look cache directory.
+This forces fresh downloads of all repository metadata on subsequent operations.`,
+	Args:    cobra.NoArgs,
+	Example: `  apt-look purge-cache`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runPurgeCache()
+	},
+}
+
 func init() {
 	// Global flags available to all commands
 	rootCmd.PersistentFlags().StringVarP(&options.format, "format", "f", "text",
@@ -175,6 +188,7 @@ func init() {
 	rootCmd.AddCommand(downloadCmd)
 	rootCmd.AddCommand(searchCmd)
 	rootCmd.AddCommand(checkCmd)
+	rootCmd.AddCommand(purgeCacheCmd)
 }
 
 func loadTransports() *apttransport.Registry {
@@ -411,6 +425,22 @@ func runSearch(source, searchTerm, format string) error {
 	// 2. Filtering by search term
 	// 3. Formatting results according to --format flag
 
+	return nil
+}
+
+func runPurgeCache() error {
+	log.Info().Msg("Purging apt-look cache")
+
+	// Load transport registry to access cache functionality
+	registry := loadTransports()
+
+	// Purge the cache
+	err := registry.PurgeCache()
+	if err != nil {
+		return fmt.Errorf("failed to purge cache: %w", err)
+	}
+
+	log.Info().Msg("Cache purged successfully")
 	return nil
 }
 
