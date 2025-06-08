@@ -63,7 +63,7 @@ type CacheTransport struct {
 type CacheConfig struct {
 	// Disabled completely disables caching
 	Disabled bool
-	
+
 	// CacheDir specifies the cache directory. If empty, uses XDG_CACHE_HOME/apt-look
 	CacheDir string
 }
@@ -122,7 +122,7 @@ func (c *CacheTransport) Acquire(ctx context.Context, req *AcquireRequest) (*Acq
 	}
 
 	// Only count cache misses for cacheable files (not Release files or when disabled)
-	if isPackagesFile(req.URI) {
+	if isCacheableFile(req.URI) {
 		c.stats.Miss()
 	}
 	log.Debug().Str("uri", req.URI.String()).Str("cache_key", cacheKey).Msg("cache: MISS")
@@ -133,9 +133,9 @@ func (c *CacheTransport) Acquire(ctx context.Context, req *AcquireRequest) (*Acq
 		return nil, err
 	}
 
-	// If this is a packages file and we got content, cache it
-	if isPackagesFile(req.URI) && resp.Content != nil {
-		log.Debug().Str("uri", req.URI.String()).Str("cache_key", cacheKey).Msg("cache: storing response")
+	// If this is a cacheable file and we got content, cache it
+	if isCacheableFile(req.URI) && resp.Content != nil {
+		log.Debug().Str("uri", req.URI.String()).Str("cache_key", cacheKey).Msg("cache: storing cacheable file")
 		return c.cacheResponse(resp, cachePath, req)
 	}
 
@@ -297,6 +297,40 @@ func isPackagesFile(uri *url.URL) bool {
 		strings.HasSuffix(path, "/packages.gz") ||
 		strings.HasSuffix(path, "/packages.bz2") ||
 		strings.HasSuffix(path, "/packages.xz")
+}
+
+func isCacheableFile(uri *url.URL) bool {
+	path := strings.ToLower(uri.Path)
+
+	// Cache Packages files
+	if isPackagesFile(uri) {
+		return true
+	}
+
+	// Cache Contents files
+	if strings.Contains(path, "/contents") ||
+		strings.Contains(path, "contents-") ||
+		strings.HasSuffix(path, "/contents.gz") ||
+		strings.HasSuffix(path, "/contents.bz2") ||
+		strings.HasSuffix(path, "/contents.xz") {
+		return true
+	}
+
+	// Cache Sources files
+	if strings.Contains(path, "/sources") ||
+		strings.HasSuffix(path, "/sources.gz") ||
+		strings.HasSuffix(path, "/sources.bz2") ||
+		strings.HasSuffix(path, "/sources.xz") {
+		return true
+	}
+
+	// Cache Translation files
+	if strings.Contains(path, "/translation") ||
+		strings.Contains(path, "translation-") {
+		return true
+	}
+
+	return false
 }
 
 // GetStats returns the cache statistics
