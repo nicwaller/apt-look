@@ -21,8 +21,7 @@ func ParseRecords(r io.Reader) iter.Seq2[rfc822.Header, error] {
 			if len(lines) > 0 {
 				// Join lines and parse as a single header
 				content := strings.Join(lines, "\n")
-				parser := rfc822.NewParser()
-				header, err := parser.ParseHeader(strings.NewReader(content))
+				header, err := rfc822.ParseHeader(strings.NewReader(content))
 				if err != nil {
 					yield(nil, fmt.Errorf("parsing header: %w", err))
 					return false

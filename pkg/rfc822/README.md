@@ -28,10 +28,14 @@ For parsing multiple records separated by blank lines (as used in APT repository
 - **`Header`**: A slice of Fields representing a single RFC 822 header section
 - **`Parser`**: The main parser type
 
+### Functions
+
+- **`ParseHeader(r io.Reader) (Header, error)`**: Convenience function to parse a single RFC 822 header section
+- **`NewParser()`**: Create a new parser instance
+
 ### Methods
 
-- **`NewParser()`**: Create a new parser instance
-- **`ParseHeader(r io.Reader) (Header, error)`**: Parse a single RFC 822 header section
+- **`(*Parser) ParseHeader(r io.Reader) (Header, error)`**: Parse a single RFC 822 header section
 - **`Header.Lookup(field string) (Field, bool)`**: Get field and existence check (case-insensitive)
 - **`Header.Get(field string) string`**: Get field value as single string (case-insensitive)
 - **`Header.GetLines(field string) []string`**: Get field value as lines (case-insensitive)

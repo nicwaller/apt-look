@@ -118,3 +118,9 @@ func (p *Parser) validateFieldName(name string) error {
 
 	return nil
 }
+
+// ParseHeader is a convenience function that creates a Parser and parses a single RFC822 header section
+func ParseHeader(r io.Reader) (Header, error) {
+	parser := NewParser()
+	return parser.ParseHeader(r)
+}

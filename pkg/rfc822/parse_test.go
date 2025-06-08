@@ -129,3 +129,17 @@ func TestFieldStringMethods(t *testing.T) {
 	assert.Equal(t, expectedMultilineString, multilineField.String())
 }
 
+func TestPackageLevelParseHeader(t *testing.T) {
+	input := `Name: test-package
+Value: 1.0.0`
+
+	// Test the package-level convenience function
+	header, err := ParseHeader(strings.NewReader(input))
+	require.NoError(t, err)
+	require.NotEmpty(t, header, "No header found")
+
+	// Verify it works the same as the method-based approach
+	assert.Equal(t, "test-package", header.Get("Name"))
+	assert.Equal(t, "1.0.0", header.Get("Value"))
+}
+

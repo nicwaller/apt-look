@@ -51,8 +51,7 @@ type Release struct {
 
 // ParseRelease parses an APT Release file from the given reader
 func ParseRelease(r io.Reader) (*Release, error) {
-	parser := rfc822.NewParser()
-	header, err := parser.ParseHeader(r)
+	header, err := rfc822.ParseHeader(r)
 	if err != nil {
 		return nil, fmt.Errorf("parsing release file: %w", err)
 	}
