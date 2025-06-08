@@ -61,6 +61,8 @@ func (p *Parser) parseRecords(r io.Reader, yield func(Record, error) bool) error
 		line := scanner.Text()
 
 		// Skip comment lines (start with '#')
+		// This is not technically part of RFC822; comment lines are introduced by deb822
+		// But it's way easier to just implement here.
 		if strings.HasPrefix(strings.TrimLeft(line, " \t"), "#") {
 			continue
 		}
