@@ -10,17 +10,53 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/rs/zerolog/log"
 )
 
 var _ Transport = &CacheTransport{}
 
+// CacheStats tracks cache performance metrics
+type CacheStats struct {
+	hits   int64
+	misses int64
+	mu     sync.RWMutex
+}
+
+func (cs *CacheStats) Hit() {
+	cs.mu.Lock()
+	cs.hits++
+	cs.mu.Unlock()
+}
+
+func (cs *CacheStats) Miss() {
+	cs.mu.Lock()
+	cs.misses++
+	cs.mu.Unlock()
+}
+
+func (cs *CacheStats) GetStats() (hits, misses int64) {
+	cs.mu.RLock()
+	defer cs.mu.RUnlock()
+	return cs.hits, cs.misses
+}
+
+func (cs *CacheStats) GetHitRatio() float64 {
+	hits, misses := cs.GetStats()
+	total := hits + misses
+	if total == 0 {
+		return 0.0
+	}
+	return float64(hits) / float64(total)
+}
+
 // CacheTransport wraps another transport with caching capabilities
 type CacheTransport struct {
 	wrapped  Transport
 	cacheDir string
 	disabled bool
+	stats    *CacheStats
 }
 
 // CacheConfig configures the caching behavior
@@ -53,6 +89,7 @@ func NewCacheTransport(wrapped Transport, config CacheConfig) (*CacheTransport, 
 		wrapped:  wrapped,
 		cacheDir: cacheDir,
 		disabled: config.Disabled,
+		stats:    &CacheStats{},
 	}, nil
 }
 
@@ -79,10 +116,15 @@ func (c *CacheTransport) Acquire(ctx context.Context, req *AcquireRequest) (*Acq
 
 	// Try to load from cache first
 	if cached, err := c.loadFromCache(cachePath, req); err == nil && cached != nil {
+		c.stats.Hit()
 		log.Debug().Str("uri", req.URI.String()).Str("cache_key", cacheKey).Msg("cache: HIT")
 		return cached, nil
 	}
 
+	// Only count cache misses for cacheable files (not Release files or when disabled)
+	if isPackagesFile(req.URI) {
+		c.stats.Miss()
+	}
 	log.Debug().Str("uri", req.URI.String()).Str("cache_key", cacheKey).Msg("cache: MISS")
 
 	// Fetch from wrapped transport
@@ -255,4 +297,9 @@ func isPackagesFile(uri *url.URL) bool {
 		strings.HasSuffix(path, "/packages.gz") ||
 		strings.HasSuffix(path, "/packages.bz2") ||
 		strings.HasSuffix(path, "/packages.xz")
+}
+
+// GetStats returns the cache statistics
+func (c *CacheTransport) GetStats() *CacheStats {
+	return c.stats
 }

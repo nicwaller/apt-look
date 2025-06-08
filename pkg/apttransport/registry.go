@@ -1,25 +1,32 @@
 package apttransport
 
-import "context"
+import (
+	"context"
+	"sync"
+)
 
 // Registry manages multiple transport implementations with optional caching
 type Registry struct {
-	transports  map[string]Transport
-	cacheConfig CacheConfig
+	transports     map[string]Transport
+	cachedTransports map[string]*CacheTransport
+	cacheConfig    CacheConfig
+	mu             sync.RWMutex
 }
 
 // NewRegistry creates a new transport registry
 func NewRegistry() *Registry {
 	return &Registry{
-		transports: make(map[string]Transport),
+		transports:       make(map[string]Transport),
+		cachedTransports: make(map[string]*CacheTransport),
 	}
 }
 
 // NewRegistryWithCache creates a new transport registry with caching configuration
 func NewRegistryWithCache(config CacheConfig) *Registry {
 	return &Registry{
-		transports:  make(map[string]Transport),
-		cacheConfig: config,
+		transports:       make(map[string]Transport),
+		cachedTransports: make(map[string]*CacheTransport),
+		cacheConfig:      config,
 	}
 }
 
@@ -37,19 +44,31 @@ func (r *Registry) SetCacheConfig(config CacheConfig) {
 
 // Acquire automatically selects the appropriate transport and fetches the resource
 func (r *Registry) Acquire(ctx context.Context, req *AcquireRequest) (*AcquireResponse, error) {
+	r.mu.RLock()
 	transport, exists := r.transports[req.URI.Scheme]
+	r.mu.RUnlock()
+	
 	if !exists {
 		return nil, &UnsupportedSchemeError{Scheme: req.URI.Scheme}
 	}
 
-	// Wrap transport with caching if not disabled
+	// Use cached transport if caching is enabled
 	if !r.cacheConfig.Disabled {
-		cachedTransport, err := NewCacheTransport(transport, r.cacheConfig)
-		if err != nil {
-			// If cache setup fails, fall back to uncached transport
-			return transport.Acquire(ctx, req)
+		r.mu.Lock()
+		cachedTransport, cached := r.cachedTransports[req.URI.Scheme]
+		if !cached {
+			// Create and store cached transport for this scheme
+			newCachedTransport, err := NewCacheTransport(transport, r.cacheConfig)
+			if err != nil {
+				r.mu.Unlock()
+				// If cache setup fails, fall back to uncached transport
+				return transport.Acquire(ctx, req)
+			}
+			r.cachedTransports[req.URI.Scheme] = newCachedTransport
+			cachedTransport = newCachedTransport
 		}
-		transport = cachedTransport
+		r.mu.Unlock()
+		return cachedTransport.Acquire(ctx, req)
 	}
 
 	return transport.Acquire(ctx, req)
@@ -69,4 +88,30 @@ func (r *Registry) PurgeCache() error {
 	}
 
 	return cacheTransport.PurgeCache()
+}
+
+// GetCacheStats returns aggregate cache statistics across all cached transports
+func (r *Registry) GetCacheStats() (hits, misses int64, hitRatio float64) {
+	if r.cacheConfig.Disabled {
+		return 0, 0, 0.0
+	}
+
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	totalHits := int64(0)
+	totalMisses := int64(0)
+
+	for _, cachedTransport := range r.cachedTransports {
+		h, m := cachedTransport.GetStats().GetStats()
+		totalHits += h
+		totalMisses += m
+	}
+
+	total := totalHits + totalMisses
+	if total == 0 {
+		return totalHits, totalMisses, 0.0
+	}
+
+	return totalHits, totalMisses, float64(totalHits) / float64(total)
 }

@@ -174,6 +174,62 @@ func TestCacheTransport_PackagesFileCaching(t *testing.T) {
 	assert.Equal(t, 1, mock.getCallCount(packagesURI))
 }
 
+func TestRegistry_CacheStats(t *testing.T) {
+	mock := newMockTransport()
+	cacheDir := t.TempDir()
+	config := CacheConfig{Disabled: false, CacheDir: cacheDir}
+	
+	registry := NewRegistryWithCache(config)
+	registry.Register(mock)
+	
+	// Initially no stats
+	hits, misses, hitRatio := registry.GetCacheStats()
+	assert.Equal(t, int64(0), hits)
+	assert.Equal(t, int64(0), misses)
+	assert.Equal(t, 0.0, hitRatio)
+	
+	// Set up mock response for Packages file
+	packagesURI := "mock://example.com/dists/jammy/main/binary-amd64/Packages"
+	packagesContent := "Package: test-package\nVersion: 1.0.0\n"
+	mock.setResponse(packagesURI, packagesContent)
+	
+	parsedURI, err := url.Parse(packagesURI)
+	require.NoError(t, err)
+	
+	req := &AcquireRequest{URI: parsedURI}
+	ctx := context.Background()
+	
+	// First request - should be a miss
+	resp1, err := registry.Acquire(ctx, req)
+	require.NoError(t, err)
+	resp1.Content.Close()
+	
+	hits, misses, hitRatio = registry.GetCacheStats()
+	assert.Equal(t, int64(0), hits)
+	assert.Equal(t, int64(1), misses)
+	assert.Equal(t, 0.0, hitRatio)
+	
+	// Second request - should be a hit
+	resp2, err := registry.Acquire(ctx, req)
+	require.NoError(t, err)
+	resp2.Content.Close()
+	
+	hits, misses, hitRatio = registry.GetCacheStats()
+	assert.Equal(t, int64(1), hits)
+	assert.Equal(t, int64(1), misses)
+	assert.Equal(t, 0.5, hitRatio)
+	
+	// Third request - another hit
+	resp3, err := registry.Acquire(ctx, req)
+	require.NoError(t, err)
+	resp3.Content.Close()
+	
+	hits, misses, hitRatio = registry.GetCacheStats()
+	assert.Equal(t, int64(2), hits)
+	assert.Equal(t, int64(1), misses)
+	assert.InDelta(t, 0.6667, hitRatio, 0.001) // 2/3 ≈ 0.6667
+}
+
 func TestCacheTransport_CacheKeyGeneration(t *testing.T) {
 	mock := newMockTransport()
 	config := CacheConfig{Disabled: false, CacheDir: t.TempDir()}

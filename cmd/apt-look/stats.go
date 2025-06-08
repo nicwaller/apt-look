@@ -26,13 +26,29 @@ func runStats(sources []aptrepo.SourceEntry, format string) error {
 	}
 
 	// Calculate statistics
-	stats, err := calculateRepositoryStats(source)
+	stats, registry, err := calculateRepositoryStats(source)
 	if err != nil {
 		return fmt.Errorf("failed to calculate statistics: %w", err)
 	}
 
 	// Format and output results
-	return outputStats(source, stats, format)
+	err = outputStats(source, stats, format)
+	if err != nil {
+		return err
+	}
+
+	// Display cache statistics
+	hits, misses, hitRatio := registry.GetCacheStats()
+	if hits > 0 || misses > 0 {
+		log.Info().
+			Int64("cache_hits", hits).
+			Int64("cache_misses", misses).
+			Float64("hit_ratio", hitRatio).
+			Msgf("Cache performance: %d hits, %d misses (%.1f%% hit ratio)", 
+				hits, misses, hitRatio*100)
+	}
+
+	return nil
 }
 
 // RepositoryStats holds statistics about a repository
@@ -59,7 +75,7 @@ type RepositoryStats struct {
 	} `json:"packages"`
 }
 
-func calculateRepositoryStats(source aptrepo.SourceEntry) (*RepositoryStats, error) {
+func calculateRepositoryStats(source aptrepo.SourceEntry) (*RepositoryStats, *apttransport.Registry, error) {
 	stats := &RepositoryStats{}
 
 	// Use the transport registry with caching
@@ -69,7 +85,7 @@ func calculateRepositoryStats(source aptrepo.SourceEntry) (*RepositoryStats, err
 	releaseURL := strings.TrimSuffix(source.URI, "/") + "/dists/" + source.Distribution + "/Release"
 	parsedURL, err := url.Parse(releaseURL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse Release URL %s: %w", releaseURL, err)
+		return nil, nil, fmt.Errorf("failed to parse Release URL %s: %w", releaseURL, err)
 	}
 
 	ctx := context.Background()
@@ -78,13 +94,13 @@ func calculateRepositoryStats(source aptrepo.SourceEntry) (*RepositoryStats, err
 		Timeout: 30 * time.Second,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch Release file from %s: %w", releaseURL, err)
+		return nil, nil, fmt.Errorf("failed to fetch Release file from %s: %w", releaseURL, err)
 	}
 	defer resp.Content.Close()
 
 	release, err := deb822.ParseRelease(resp.Content)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse Release file: %w", err)
+		return nil, nil, fmt.Errorf("failed to parse Release file: %w", err)
 	}
 
 	// Fill repository info from Release file
@@ -124,7 +140,7 @@ func calculateRepositoryStats(source aptrepo.SourceEntry) (*RepositoryStats, err
 	// Calculate derived statistics
 	stats.Packages.TotalSizeMB = stats.Packages.TotalSize / (1024 * 1024)
 
-	return stats, nil
+	return stats, registry, nil
 }
 
 func outputStats(source aptrepo.SourceEntry, stats *RepositoryStats, format string) error {
