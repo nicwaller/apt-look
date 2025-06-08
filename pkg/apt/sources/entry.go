@@ -19,8 +19,13 @@ const (
 	SourceTypeUnknown SourceType = "unknown"
 )
 
-// SourceEntry represents a single APT source entry from sources.list
-type SourceEntry struct {
+// List represents a collection of APT source entries
+type List struct {
+	Entries []Entry `json:"entries"`
+}
+
+// Entry represents a single APT source entry from sources.list
+type Entry struct {
 	// Entry type (deb or deb-src)
 	Type SourceType `json:"type"`
 
@@ -46,14 +51,9 @@ type SourceEntry struct {
 	LineNumber int `json:"line_number,omitempty"`
 }
 
-// SourcesList represents a collection of APT source entries
-type SourcesList struct {
-	Entries []SourceEntry `json:"entries"`
-}
-
 // ParseSources parses APT sources.list format and returns an iterator over source entries
-func ParseSources(r io.Reader) iter.Seq2[*SourceEntry, error] {
-	return func(yield func(*SourceEntry, error) bool) {
+func ParseSources(r io.Reader) iter.Seq2[*Entry, error] {
+	return func(yield func(*Entry, error) bool) {
 		scanner := bufio.NewScanner(r)
 		lineNumber := 0
 
@@ -88,9 +88,9 @@ func ParseSources(r io.Reader) iter.Seq2[*SourceEntry, error] {
 	}
 }
 
-// ParseSourcesList parses an entire sources.list file into a SourcesList structure
-func ParseSourcesList(r io.Reader) (*SourcesList, error) {
-	var entries []SourceEntry
+// ParseSourcesList parses an entire sources.list file into a List structure
+func ParseSourcesList(r io.Reader) (*List, error) {
+	var entries []Entry
 
 	for entry, err := range ParseSources(r) {
 		if err != nil {
@@ -99,11 +99,11 @@ func ParseSourcesList(r io.Reader) (*SourcesList, error) {
 		entries = append(entries, *entry)
 	}
 
-	return &SourcesList{Entries: entries}, nil
+	return &List{Entries: entries}, nil
 }
 
 // parseSourceLine parses a single line from sources.list
-func parseSourceLine(line string, lineNumber int) (*SourceEntry, error) {
+func parseSourceLine(line string, lineNumber int) (*Entry, error) {
 	originalLine := line
 	line = strings.TrimSpace(line)
 
@@ -146,7 +146,7 @@ func parseSourceLine(line string, lineNumber int) (*SourceEntry, error) {
 	// Split remaining line into fields
 	fields := strings.Fields(line)
 	if len(fields) < 3 {
-		return &SourceEntry{
+		return &Entry{
 			Enabled:      enabled,
 			OriginalLine: originalLine,
 			LineNumber:   lineNumber,
@@ -156,7 +156,7 @@ func parseSourceLine(line string, lineNumber int) (*SourceEntry, error) {
 	// Parse source type
 	sourceType := parseSourceType(fields[0])
 	if sourceType == SourceTypeUnknown {
-		return &SourceEntry{
+		return &Entry{
 			Enabled:      enabled,
 			OriginalLine: originalLine,
 			LineNumber:   lineNumber,
@@ -166,7 +166,7 @@ func parseSourceLine(line string, lineNumber int) (*SourceEntry, error) {
 	// Parse URI
 	uri := fields[1]
 	if err := validateURI(uri); err != nil {
-		return &SourceEntry{
+		return &Entry{
 			Type:         sourceType,
 			URI:          uri,
 			Enabled:      enabled,
@@ -184,7 +184,7 @@ func parseSourceLine(line string, lineNumber int) (*SourceEntry, error) {
 		components = fields[3:]
 	}
 
-	return &SourceEntry{
+	return &Entry{
 		Type:         sourceType,
 		URI:          uri,
 		Distribution: distribution,
@@ -253,8 +253,8 @@ func isSourceLine(line string) bool {
 }
 
 // GetEnabledEntries returns only enabled source entries
-func (sl *SourcesList) GetEnabledEntries() []SourceEntry {
-	var enabled []SourceEntry
+func (sl *List) GetEnabledEntries() []Entry {
+	var enabled []Entry
 	for _, entry := range sl.Entries {
 		if entry.Enabled {
 			enabled = append(enabled, entry)
@@ -264,8 +264,8 @@ func (sl *SourcesList) GetEnabledEntries() []SourceEntry {
 }
 
 // GetDisabledEntries returns only disabled (commented out) source entries
-func (sl *SourcesList) GetDisabledEntries() []SourceEntry {
-	var disabled []SourceEntry
+func (sl *List) GetDisabledEntries() []Entry {
+	var disabled []Entry
 	for _, entry := range sl.Entries {
 		if !entry.Enabled {
 			disabled = append(disabled, entry)
@@ -275,8 +275,8 @@ func (sl *SourcesList) GetDisabledEntries() []SourceEntry {
 }
 
 // GetByType returns entries of a specific type (deb or deb-src)
-func (sl *SourcesList) GetByType(sourceType SourceType) []SourceEntry {
-	var filtered []SourceEntry
+func (sl *List) GetByType(sourceType SourceType) []Entry {
+	var filtered []Entry
 	for _, entry := range sl.Entries {
 		if entry.Type == sourceType {
 			filtered = append(filtered, entry)
@@ -286,8 +286,8 @@ func (sl *SourcesList) GetByType(sourceType SourceType) []SourceEntry {
 }
 
 // GetByURI returns entries matching a specific URI
-func (sl *SourcesList) GetByURI(uri string) []SourceEntry {
-	var filtered []SourceEntry
+func (sl *List) GetByURI(uri string) []Entry {
+	var filtered []Entry
 	for _, entry := range sl.Entries {
 		if entry.URI == uri {
 			filtered = append(filtered, entry)
@@ -297,7 +297,7 @@ func (sl *SourcesList) GetByURI(uri string) []SourceEntry {
 }
 
 // HasComponent checks if an entry contains a specific component
-func (se *SourceEntry) HasComponent(component string) bool {
+func (se *Entry) HasComponent(component string) bool {
 	for _, comp := range se.Components {
 		if comp == component {
 			return true
@@ -307,7 +307,7 @@ func (se *SourceEntry) HasComponent(component string) bool {
 }
 
 // GetOption returns the value of a specific option, with a default value if not found
-func (se *SourceEntry) GetOption(key, defaultValue string) string {
+func (se *Entry) GetOption(key, defaultValue string) string {
 	if value, exists := se.Options[key]; exists {
 		return value
 	}
@@ -315,13 +315,13 @@ func (se *SourceEntry) GetOption(key, defaultValue string) string {
 }
 
 // HasOption checks if an entry has a specific option set
-func (se *SourceEntry) HasOption(key string) bool {
+func (se *Entry) HasOption(key string) bool {
 	_, exists := se.Options[key]
 	return exists
 }
 
 // String returns a string representation of the source entry in sources.list format
-func (se *SourceEntry) String() string {
+func (se *Entry) String() string {
 	var parts []string
 
 	// Add comment prefix if disabled
