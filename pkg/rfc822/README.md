@@ -4,7 +4,9 @@ A Go package for parsing RFC 822 header sections from email-style messages.
 
 ## Overview
 
-This package provides a pure RFC 822 parser that handles the header section of email messages. It parses field-value pairs according to RFC 822 specification and stops at the first blank line (which separates headers from message body in RFC 822).
+This package provides a partial implementation of [RFC 822](https://datatracker.ietf.org/doc/html/rfc822) "Standard for the format of ARPA Internet text messages", focusing specifically on header field parsing. It parses field-value pairs according to RFC 822 specification and stops at the first blank line (which separates headers from message body in RFC 822).
+
+This implementation includes only the subset of RFC 822 needed to support the `deb822` package, which uses RFC 822-style syntax for APT repository metadata files.
 
 For parsing multiple records separated by blank lines (as used in APT repository files), see the `deb822` package which builds upon this foundation.
 
@@ -37,38 +39,6 @@ For parsing multiple records separated by blank lines (as used in APT repository
 - **`Record.Fields() []string`**: List all field names in order
 - **`Record.String() string`**: Convert record back to RFC 822 format
 - **`FieldValues.Unfold() string`**: Convert field value to single logical line per RFC 822 unfolding rules
-
-## Usage
-
-```go
-package main
-
-import (
-    "fmt"
-    "strings"
-    
-    "github.com/nicwaller/apt-look/pkg/rfc822"
-)
-
-func main() {
-    input := `From: user@example.com
-To: recipient@example.com
-Subject: Hello World
-Date: Mon, 1 Jan 2024 12:00:00 +0000
-
-This is the message body.`
-
-    parser := rfc822.NewParser()
-    header, err := parser.ParseHeader(strings.NewReader(input))
-    if err != nil {
-        panic(err)
-    }
-
-    fmt.Printf("From: %s\n", header.Get("From"))
-    fmt.Printf("Subject: %s\n", header.Get("Subject"))
-    fmt.Printf("Has Date: %t\n", header.Has("Date"))
-}
-```
 
 ## Validation
 
