@@ -196,6 +196,41 @@ When a Release file lists multiple compression formats for the same file:
 - Attempt decompression with appropriate handler
 - Cache decompressed content with filename based on uncompressed content hash
 
+### Acquire-By-Hash Support
+
+**APT Acquire-By-Hash Feature:**
+Modern APT repositories support the Acquire-By-Hash mechanism for atomic updates and better mirror consistency. When `Acquire-By-Hash: yes` is present in the Release file, files are also available via their hash values.
+
+**Hash-based URLs:**
+Standard path: `main/binary-amd64/Packages.gz`
+By-hash path: `main/binary-amd64/by-hash/SHA256/a1b2c3d4...`
+
+**Implementation Strategy:**
+1. **Check Release file** for `Acquire-By-Hash: yes` field
+2. **Use strongest available hash** (SHA256 > SHA1 > MD5) from consolidated FileInfo
+3. **Prefer by-hash URLs** when available for better mirror consistency
+4. **Fallback to canonical paths** if by-hash fails or is unavailable
+5. **Verify downloaded content** matches expected hash from Release file
+
+**Benefits:**
+- **Atomic updates**: Files referenced by hash are immutable
+- **Mirror consistency**: Same hash always returns identical content
+- **Integrity verification**: Built-in content validation
+- **Concurrent safety**: Multiple apt-look instances can safely share cache
+
+**URL Construction Example:**
+```
+Release file contains:
+  Acquire-By-Hash: yes
+  SHA256: a1b2c3d4ef56...890 1234567 main/binary-amd64/Packages.gz
+
+Primary attempt:
+  https://repo.example.com/ubuntu/dists/jammy/main/binary-amd64/by-hash/SHA256/a1b2c3d4ef56...890
+
+Fallback attempt:
+  https://repo.example.com/ubuntu/dists/jammy/main/binary-amd64/Packages.gz
+```
+
 ### Key Considerations
 - Single binary with minimal dependencies
 - Support for western Canada cloud regions and data centres
@@ -248,6 +283,21 @@ Selection: Packages.bz2 (smaller despite system binary requirement)
 
 Available: Packages.zst (1.5MB), Packages.xz (1.2MB)
 Selection: Packages.xz (smaller wins over compression speed)
+```
+
+**Acquire-By-Hash integration example:**
+```
+Repository supports Acquire-By-Hash: yes
+Selected: main/binary-amd64/Packages.xz (1.2MB, SHA256: abc123...)
+
+Primary URL (by-hash):
+  /dists/jammy/main/binary-amd64/by-hash/SHA256/abc123def456...
+
+Fallback URL (canonical):
+  /dists/jammy/main/binary-amd64/Packages.xz
+
+Cache key: Content-based hash of decompressed Packages data
+Verification: Downloaded content SHA256 must match abc123def456...
 ```
 
 ## Future Considerations
