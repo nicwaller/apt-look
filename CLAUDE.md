@@ -64,6 +64,23 @@ The tool should support multiple output formats:
 - `tsv`: Tab-separated values for `cut`, `awk`, spreadsheet import  
 - `raw`: Original Debian control format (pass-through)
 
+## Release File Processing
+
+The tool uses Release files as the authoritative source for repository metadata and file availability:
+
+- **File Discovery**: Never guess at file paths. Always use the SHA256/SHA1/MD5Sum sections in Release files to determine which Packages files exist
+- **Path Structure**: Release file entries follow the pattern `component/binary-architecture/Packages[.gz|.xz]` (e.g., `main/binary-amd64/Packages.gz`)
+- **File Metadata**: Each Release file entry includes hash, size, and relative path from the `/dists/{distribution}/` directory
+- **Compression Preference**: Prefer compressed versions (.gz, .xz) when multiple formats are available for the same content
+- **Error Handling**: Release files may reference files that don't exist on the server due to repository synchronization issues - this should be handled gracefully with warnings rather than silent failures
+- **Repository Validation**: The tool validates that only files listed in Release metadata are fetched, preventing unnecessary 404 errors from path guessing
+
+### Implementation Details
+
+- The `deb822.Release` struct provides `GetAvailableFiles()` and `GetPackagesFiles(component, architecture)` methods
+- File paths from Release files are used directly to construct download URLs: `{baseURL}/dists/{distribution}/{releasePath}`
+- The `FileInfo` struct categorizes files by type (Packages, Sources, Contents), component, architecture, and compression status
+
 ## Design Philosophy
 
 Delegates complex operations to existing tools and focuses on:
@@ -71,3 +88,7 @@ Delegates complex operations to existing tools and focuses on:
 - Simple package retrieval
 - Structured output for pipeline integration
 - No system configuration required
+
+## Contributing
+
+Always run "go fmt ./..." before committing

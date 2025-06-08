@@ -165,7 +165,7 @@ func loadTransports() *apttransport.Registry {
 	cacheConfig := apttransport.CacheConfig{
 		Disabled: false, // TODO: add --no-cache flag
 	}
-	
+
 	r := apttransport.NewRegistryWithCache(cacheConfig)
 	r.Register(apttransport.NewHTTPTransport())
 	r.Register(apttransport.NewFileTransport())
@@ -228,6 +228,71 @@ func parseSourceInput(source string) ([]aptrepo.SourceEntry, error) {
 	}
 
 	return entries, nil
+}
+
+func processPackagesFileFromRelease(registry *apttransport.Registry, source aptrepo.SourceEntry, fileInfo deb822.FileInfo, stats *RepositoryStats) error {
+	// Construct URL using the exact path from the Release file
+	packagesURL := strings.TrimSuffix(source.URI, "/") + "/dists/" + source.Distribution + "/" + fileInfo.Path
+
+	parsedURL, err := url.Parse(packagesURL)
+	if err != nil {
+		return fmt.Errorf("failed to parse URL %s: %w", packagesURL, err)
+	}
+
+	ctx := context.Background()
+	resp, err := registry.Acquire(ctx, &apttransport.AcquireRequest{
+		URI:     parsedURL,
+		Timeout: 30 * time.Second,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to fetch %s: %w", packagesURL, err)
+	}
+	defer resp.Content.Close()
+
+	// Handle gzipped files
+	var reader = resp.Content
+	if fileInfo.Compressed {
+		gzReader, err := gzip.NewReader(resp.Content)
+		if err != nil {
+			return fmt.Errorf("failed to decompress %s: %w", packagesURL, err)
+		}
+		defer gzReader.Close()
+		reader = gzReader
+	}
+
+	// Parse packages and update stats
+	packageCount := 0
+	for pkg, err := range deb822.ParsePackages(reader) {
+		if err != nil {
+			log.Warn().Err(err).Msg("Error parsing package")
+			continue
+		}
+
+		packageCount++
+		stats.Packages.Total++
+		stats.Packages.TotalSize += pkg.Size
+
+		// Count by architecture
+		if pkg.Architecture != "" {
+			stats.Packages.ByArchitecture[pkg.Architecture]++
+		}
+
+		// Count by component
+		stats.Packages.ByComponent[fileInfo.Component]++
+
+		// Count by section
+		if pkg.Section != "" {
+			stats.Packages.BySection[pkg.Section]++
+		}
+
+		// Count by priority
+		if pkg.Priority != "" {
+			stats.Packages.ByPriority[pkg.Priority]++
+		}
+	}
+
+	log.Debug().Msgf("Processed %d packages from %s", packageCount, packagesURL)
+	return nil
 }
 
 func processPackagesFile(registry *apttransport.Registry, source aptrepo.SourceEntry, component, arch string, stats *RepositoryStats) error {

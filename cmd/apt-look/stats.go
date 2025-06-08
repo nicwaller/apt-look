@@ -44,7 +44,7 @@ func runStats(sources []aptrepo.SourceEntry, format string) error {
 			Int64("cache_hits", hits).
 			Int64("cache_misses", misses).
 			Float64("hit_ratio", hitRatio).
-			Msgf("Cache performance: %d hits, %d misses (%.1f%% hit ratio)", 
+			Msgf("Cache performance: %d hits, %d misses (%.1f%% hit ratio)",
 				hits, misses, hitRatio*100)
 	}
 
@@ -118,7 +118,7 @@ func calculateRepositoryStats(source aptrepo.SourceEntry) (*RepositoryStats, *ap
 	stats.Packages.BySection = make(map[string]int)
 	stats.Packages.ByPriority = make(map[string]int)
 
-	// Fetch and parse Packages files for each component/architecture
+	// Fetch and parse Packages files based on what's actually available in the Release file
 	for _, component := range source.Components {
 		if component == "" {
 			continue
@@ -129,7 +129,26 @@ func calculateRepositoryStats(source aptrepo.SourceEntry) (*RepositoryStats, *ap
 				continue // Skip source architecture for binary package stats
 			}
 
-			err := processPackagesFile(registry, source, component, arch, stats)
+			// Check if Packages files exist for this component/architecture combination
+			packagesFiles := release.GetPackagesFiles(component, arch)
+			if len(packagesFiles) == 0 {
+				log.Debug().Msgf("No Packages files found for %s/%s", component, arch)
+				continue
+			}
+
+			// Process the first available Packages file (prefer compressed)
+			var fileToProcess *deb822.FileInfo
+			for _, file := range packagesFiles {
+				if file.Compressed {
+					fileToProcess = &file
+					break
+				}
+			}
+			if fileToProcess == nil {
+				fileToProcess = &packagesFiles[0] // Use first available if no compressed version
+			}
+
+			err := processPackagesFileFromRelease(registry, source, *fileToProcess, stats)
 			if err != nil {
 				log.Warn().Err(err).Msgf("Failed to process packages for %s/%s", component, arch)
 				continue

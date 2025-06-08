@@ -17,6 +17,15 @@ type HashEntry struct {
 	Path string `json:"path"`
 }
 
+// FileInfo represents metadata about a file referenced in the Release file
+type FileInfo struct {
+	HashEntry
+	Type         string `json:"type"`         // "Packages", "Release", "Contents", etc.
+	Component    string `json:"component"`    // e.g., "main", "universe"
+	Architecture string `json:"architecture"` // e.g., "amd64", "all"
+	Compressed   bool   `json:"compressed"`   // true if file is gzipped
+}
+
 // Release represents an APT Release file with all standardized fields
 type Release struct {
 	// Mandatory fields
@@ -255,4 +264,101 @@ func (r *Release) HasField(name string) bool {
 // Fields returns all field names from the underlying RFC822 header
 func (r *Release) Fields() []string {
 	return r.header.Fields()
+}
+
+// GetAvailableFiles returns a categorized list of files referenced in the Release file
+func (r *Release) GetAvailableFiles() []FileInfo {
+	var files []FileInfo
+
+	// Process SHA256 entries (preferred)
+	for _, entry := range r.SHA256 {
+		if fileInfo := parseFileInfo(entry); fileInfo != nil {
+			files = append(files, *fileInfo)
+		}
+	}
+
+	// If no SHA256 entries, fall back to SHA1
+	if len(files) == 0 {
+		for _, entry := range r.SHA1 {
+			if fileInfo := parseFileInfo(entry); fileInfo != nil {
+				files = append(files, *fileInfo)
+			}
+		}
+	}
+
+	// If no SHA1 entries, fall back to MD5Sum (legacy)
+	if len(files) == 0 {
+		for _, entry := range r.MD5Sum {
+			if fileInfo := parseFileInfo(entry); fileInfo != nil {
+				files = append(files, *fileInfo)
+			}
+		}
+	}
+
+	return files
+}
+
+// GetPackagesFiles returns only the Packages files for the specified component and architecture
+func (r *Release) GetPackagesFiles(component, architecture string) []FileInfo {
+	var packagesFiles []FileInfo
+
+	for _, file := range r.GetAvailableFiles() {
+		if file.Type == "Packages" && file.Component == component && file.Architecture == architecture {
+			packagesFiles = append(packagesFiles, file)
+		}
+	}
+
+	return packagesFiles
+}
+
+// parseFileInfo extracts file metadata from a hash entry path
+func parseFileInfo(entry HashEntry) *FileInfo {
+	info := &FileInfo{
+		HashEntry:  entry,
+		Compressed: strings.HasSuffix(entry.Path, ".gz"),
+	}
+
+	// Parse path components
+	// Examples:
+	// main/binary-amd64/Packages.gz -> component="main", arch="amd64", type="Packages"
+	// main/source/Sources.gz -> component="main", arch="source", type="Sources"
+	// Contents-amd64.gz -> component="", arch="amd64", type="Contents"
+
+	pathParts := strings.Split(entry.Path, "/")
+
+	if strings.HasPrefix(entry.Path, "Contents-") {
+		// Handle Contents files: Contents-amd64.gz
+		info.Type = "Contents"
+		filename := pathParts[len(pathParts)-1]
+		if info.Compressed {
+			filename = strings.TrimSuffix(filename, ".gz")
+		}
+		if strings.HasPrefix(filename, "Contents-") {
+			info.Architecture = strings.TrimPrefix(filename, "Contents-")
+		}
+	} else if len(pathParts) >= 3 {
+		// Handle component-based files: main/binary-amd64/Packages.gz
+		info.Component = pathParts[0]
+
+		if strings.HasPrefix(pathParts[1], "binary-") {
+			info.Architecture = strings.TrimPrefix(pathParts[1], "binary-")
+		} else if pathParts[1] == "source" {
+			info.Architecture = "source"
+		}
+
+		filename := pathParts[len(pathParts)-1]
+		if info.Compressed {
+			filename = strings.TrimSuffix(filename, ".gz")
+		}
+		info.Type = filename
+	} else {
+		// Handle other files at root level
+		filename := pathParts[len(pathParts)-1]
+		if info.Compressed {
+			filename = strings.TrimSuffix(filename, ".gz")
+		}
+		info.Type = filename
+	}
+
+	return info
 }
