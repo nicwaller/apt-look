@@ -170,12 +170,39 @@ When processing multiple repositories, output is prefixed with repository identi
 4. **Output formatters** for text/json/tsv/raw
 5. **Source list parser** for handling APT configuration files
 
+### Compression Support
+
+**APT Repository Compression Formats:**
+APT repositories use various compression schemes for metadata files (Packages, Contents, Sources, Translation). Support priority is based on file size efficiency and native Go support:
+
+**Tier 1 - Native Go Support (Preferred):**
+- `.gz` (gzip) - Standard Go `compress/gzip`
+- `.xz` (xzip/LZMA2) - Third-party Go package `github.com/ulikunitz/xz`
+- `.zst` (Zstandard) - Third-party Go package `github.com/klauspost/compress/zstd`
+
+**Tier 2 - System Binary Fallback:**
+- `.bz2` (bzip2) - System `bunzip2` command
+- `.lzma` (LZMA) - System `unlzma` command
+
+**Compression Selection Strategy:**
+When a Release file lists multiple compression formats for the same file:
+1. **Choose smallest available format** that we support
+2. **Prefer native Go support** over system binaries when sizes are similar (<10% difference)
+3. **Fallback gracefully** if preferred format fails to decompress
+
+**Implementation Notes:**
+- Parse Release file entries to identify all available compression formats per file
+- Sort by compressed file size (from Release metadata) ascending
+- Attempt decompression with appropriate handler
+- Cache decompressed content with filename based on uncompressed content hash
+
 ### Key Considerations
 - Single binary with minimal dependencies
 - Support for western Canada cloud regions and data centres
 - Secure development practices and input validation
 - Proper error handling for network/parsing issues
 - Use newest available Go version and packages
+- Intelligent compression format selection for bandwidth efficiency
 
 ## Design Philosophy
 
@@ -193,8 +220,39 @@ Following UNIX philosophy, `apt-look` delegates complex operations to existing t
 - Structured output for pipeline integration
 - No system configuration required
 
+## Compression Format Examples
+
+**Real-world APT repository compression usage:**
+
+```bash
+# Debian repositories often provide multiple formats:
+# main/binary-amd64/Packages      (uncompressed - largest)
+# main/binary-amd64/Packages.gz   (gzip - widely supported)
+# main/binary-amd64/Packages.xz   (xz - smallest, modern)
+
+# Ubuntu repositories typically provide:
+# main/binary-amd64/Packages.gz   (primary format)
+# main/binary-amd64/Packages.xz   (smaller alternative)
+
+# Some newer repositories may include:
+# main/binary-amd64/Packages.zst  (Zstandard - fastest decompression)
+```
+
+**Selection algorithm example:**
+```
+Available: Packages.xz (1.2MB), Packages.gz (2.1MB), Packages (8.4MB)
+Selection: Packages.xz (smallest + native Go support)
+
+Available: Packages.bz2 (1.8MB), Packages.gz (2.1MB) 
+Selection: Packages.bz2 (smaller despite system binary requirement)
+
+Available: Packages.zst (1.5MB), Packages.xz (1.2MB)
+Selection: Packages.xz (smaller wins over compression speed)
+```
+
 ## Future Considerations
 
 - stdin is reserved for potential future features
 - Tool designed to be composable with standard UNIX utilities
 - Extensible architecture for additional output formats or repository types
+- Potential support for additional compression formats as they emerge (e.g., Brotli)
