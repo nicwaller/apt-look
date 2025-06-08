@@ -1,4 +1,4 @@
-package aptrepo
+package sources
 
 import (
 	"encoding/json"

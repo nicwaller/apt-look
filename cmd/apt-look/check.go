@@ -10,10 +10,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nicwaller/apt-look/pkg/aptrepo"
+	"github.com/rs/zerolog/log"
+
+	"github.com/nicwaller/apt-look/pkg/apt/sources"
 	"github.com/nicwaller/apt-look/pkg/apttransport"
 	"github.com/nicwaller/apt-look/pkg/deb822"
-	"github.com/rs/zerolog/log"
 )
 
 // CheckResult represents the results of a repository integrity check
@@ -94,7 +95,7 @@ func runCheck(sourceStr, format string) error {
 	return nil
 }
 
-func performIntegrityCheck(source aptrepo.SourceEntry) (*CheckResult, *apttransport.Registry, error) {
+func performIntegrityCheck(source sources.SourceEntry) (*CheckResult, *apttransport.Registry, error) {
 	result := &CheckResult{}
 
 	// Use the transport registry with caching
