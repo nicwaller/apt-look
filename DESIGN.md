@@ -262,6 +262,65 @@ Debian package versions follow a complex format: `[epoch:]upstream-version[-debi
 - Handle version comparison errors gracefully (malformed versions)
 - Cache parsed version objects to avoid repeated parsing overhead
 
+### APT Transport Plugin Integration
+
+**System Transport Discovery:**
+On Debian-based systems (including Ubuntu), APT provides transport plugins for accessing repositories via various protocols. These are particularly valuable for private/enterprise repositories.
+
+**Common APT Transport Plugins:**
+- `apt-transport-https` - HTTPS repositories (often built-in)
+- `apt-transport-s3` - Amazon S3 private repositories
+- `apt-transport-artifactory` - JFrog Artifactory integration
+- `apt-transport-mirror` - Mirror method for redundancy
+- `apt-transport-tor` - Tor network access
+
+**Transport Plugin Discovery:**
+```bash
+# Standard locations for APT transport methods
+/usr/lib/apt/methods/          # Primary location
+/usr/local/lib/apt/methods/    # Local installations
+/opt/*/lib/apt/methods/        # Third-party packages
+```
+
+**Implementation Strategy:**
+1. **Detect Debian-based systems** via `/etc/os-release` or `/etc/debian_version`
+2. **Scan standard APT method directories** for available transport plugins
+3. **Wrap system transports** using our Transport interface
+4. **Register discovered transports** in the transport registry
+5. **Fallback to built-in transports** when system methods unavailable
+
+**Transport Interface Integration:**
+```go
+type SystemTransport struct {
+    scheme     string
+    methodPath string  // e.g., "/usr/lib/apt/methods/s3"
+}
+
+func (t *SystemTransport) Acquire(ctx context.Context, req *AcquireRequest) (*AcquireResponse, error) {
+    // Execute system APT method binary with APT protocol
+    // Parse APT method response format
+    // Return standardized AcquireResponse
+}
+```
+
+**Benefits:**
+- **Enterprise repository access**: S3, Artifactory, internal methods
+- **Existing authentication**: Leverage system APT configuration
+- **Plugin ecosystem**: Automatic support for third-party transport methods
+- **Zero configuration**: Uses existing APT setup transparently
+
+**Usage Examples:**
+```bash
+# Private S3 repository (requires apt-transport-s3)
+apt-look list "deb s3://company-apt-bucket/ubuntu/ jammy main"
+
+# Artifactory repository (requires apt-transport-artifactory)
+apt-look list "deb artifactory+https://artifacts.company.com/ubuntu/ jammy main"
+
+# Standard repositories continue working with built-in transports
+apt-look list "deb http://archive.ubuntu.com/ubuntu/ jammy main"
+```
+
 ### Key Considerations
 - Single binary with minimal dependencies
 - Support for western Canada cloud regions and data centres
@@ -269,6 +328,7 @@ Debian package versions follow a complex format: `[epoch:]upstream-version[-debi
 - Proper error handling for network/parsing issues
 - Use newest available Go version and packages
 - Intelligent compression format selection for bandwidth efficiency
+- Seamless integration with system APT transport infrastructure
 
 ## Design Philosophy
 
@@ -353,9 +413,32 @@ sort.Slice(packages, func(i, j int) bool {
 // 1.21.5-1ubuntu1
 ```
 
+**APT transport plugin integration example:**
+```bash
+# System discovery on Ubuntu
+$ ls /usr/lib/apt/methods/
+http  https  ftp  file  copy  gzip  bzip2  lzma  s3
+
+# apt-look automatically registers available transports
+Transport registry initialized:
+- http (built-in)
+- https (built-in) 
+- file (built-in)
+- s3 (system: /usr/lib/apt/methods/s3)
+
+# Private S3 repository access works transparently
+$ apt-look stats "deb s3://company-apt/ubuntu/ jammy main"
+Repository Statistics
+====================
+Origin: Company Internal
+Total Packages: 1,247
+...
+```
+
 ## Future Considerations
 
 - stdin is reserved for potential future features
 - Tool designed to be composable with standard UNIX utilities
 - Extensible architecture for additional output formats or repository types
 - Potential support for additional compression formats as they emerge (e.g., Brotli)
+- Enhanced APT method protocol support for advanced authentication schemes
