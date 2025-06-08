@@ -6,6 +6,8 @@ A Go package for parsing RFC 822 header sections from email-style messages.
 
 This package provides a partial implementation of [RFC 822](https://datatracker.ietf.org/doc/html/rfc822) "Standard for the format of ARPA Internet text messages", focusing specifically on header field parsing. It parses field-value pairs according to RFC 822 specification and stops at the first blank line (which separates headers from message body in RFC 822).
 
+Note: RFC 822 has been obsoleted by [RFC 2822](https://datatracker.ietf.org/doc/html/rfc2822), but the header parsing semantics remain compatible for our use case.
+
 This implementation includes only the subset of RFC 822 needed to support the `deb822` package, which uses RFC 822-style syntax for APT repository metadata files.
 
 For parsing multiple records separated by blank lines (as used in APT repository files), see the `deb822` package which builds upon this foundation.
