@@ -20,6 +20,7 @@ import (
 var options struct {
 	format string
 	output string
+	debug  bool
 }
 
 // Root command
@@ -125,6 +126,8 @@ func init() {
 	// Global flags available to all commands
 	rootCmd.PersistentFlags().StringVarP(&options.format, "format", "f", "text",
 		"Output format (text, json, tsv, raw)")
+	rootCmd.PersistentFlags().BoolVar(&options.debug, "debug", false,
+		"Enable debug logging")
 
 	// Command-specific flags
 	downloadCmd.Flags().StringVarP(&options.output, "output", "o", ".",
@@ -132,6 +135,13 @@ func init() {
 
 	// Add validation for format flag
 	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		// Set log level based on debug flag
+		if options.debug {
+			zerolog.SetGlobalLevel(zerolog.DebugLevel)
+		} else {
+			zerolog.SetGlobalLevel(zerolog.InfoLevel)
+		}
+
 		validFormats := []string{"text", "json", "tsv", "prom", "raw"}
 		for _, validFormat := range validFormats {
 			if options.format == validFormat {
@@ -150,8 +160,13 @@ func init() {
 	rootCmd.AddCommand(searchCmd)
 }
 
-func loadTransports() apttransport.Registry {
-	r := apttransport.NewRegistry()
+func loadTransports() *apttransport.Registry {
+	// Configure caching (enabled by default)
+	cacheConfig := apttransport.CacheConfig{
+		Disabled: false, // TODO: add --no-cache flag
+	}
+	
+	r := apttransport.NewRegistryWithCache(cacheConfig)
 	r.Register(apttransport.NewHTTPTransport())
 	r.Register(apttransport.NewFileTransport())
 	// TODO: on Debian systems, register transports for all available plugins
@@ -215,7 +230,7 @@ func parseSourceInput(source string) ([]aptrepo.SourceEntry, error) {
 	return entries, nil
 }
 
-func processPackagesFile(transport apttransport.Transport, source aptrepo.SourceEntry, component, arch string, stats *RepositoryStats) error {
+func processPackagesFile(registry *apttransport.Registry, source aptrepo.SourceEntry, component, arch string, stats *RepositoryStats) error {
 	// Try different possible Packages file locations
 	possiblePaths := []string{
 		fmt.Sprintf("/dists/%s/%s/binary-%s/Packages.gz", source.Distribution, component, arch),
@@ -231,7 +246,7 @@ func processPackagesFile(transport apttransport.Transport, source aptrepo.Source
 		}
 
 		ctx := context.Background()
-		resp, err := transport.Acquire(ctx, &apttransport.AcquireRequest{
+		resp, err := registry.Acquire(ctx, &apttransport.AcquireRequest{
 			URI:     parsedURL,
 			Timeout: 30 * time.Second,
 		})

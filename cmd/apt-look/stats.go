@@ -62,9 +62,8 @@ type RepositoryStats struct {
 func calculateRepositoryStats(source aptrepo.SourceEntry) (*RepositoryStats, error) {
 	stats := &RepositoryStats{}
 
-	// TODO: use the transport registry
-	// Initialize transport
-	transport := apttransport.NewHTTPTransport()
+	// Use the transport registry with caching
+	registry := loadTransports()
 
 	// Fetch Release file
 	releaseURL := strings.TrimSuffix(source.URI, "/") + "/dists/" + source.Distribution + "/Release"
@@ -74,7 +73,7 @@ func calculateRepositoryStats(source aptrepo.SourceEntry) (*RepositoryStats, err
 	}
 
 	ctx := context.Background()
-	resp, err := transport.Acquire(ctx, &apttransport.AcquireRequest{
+	resp, err := registry.Acquire(ctx, &apttransport.AcquireRequest{
 		URI:     parsedURL,
 		Timeout: 30 * time.Second,
 	})
@@ -114,7 +113,7 @@ func calculateRepositoryStats(source aptrepo.SourceEntry) (*RepositoryStats, err
 				continue // Skip source architecture for binary package stats
 			}
 
-			err := processPackagesFile(transport, source, component, arch, stats)
+			err := processPackagesFile(registry, source, component, arch, stats)
 			if err != nil {
 				log.Warn().Err(err).Msgf("Failed to process packages for %s/%s", component, arch)
 				continue
