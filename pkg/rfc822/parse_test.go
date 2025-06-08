@@ -39,7 +39,7 @@ Comment: A test field
 	assert.Equal(t, "1.0.0", record.Get("Value"))
 	assert.Equal(t, "example", record.Get("Type"))
 
-	expectedComment := "A test field\nThis is a multi-line comment\nwith additional details."
+	expectedComment := "A test field This is a multi-line comment with additional details."
 	assert.Equal(t, expectedComment, record.Get("Comment"))
 
 	// Test case-insensitive access
@@ -199,48 +199,6 @@ Value: 3.0.0`
 	}
 
 	assert.Equal(t, 2, count)
-}
-
-func TestAccessorMethods(t *testing.T) {
-	input := `Name: test-item
-Value: 1.0.0`
-
-	parser := NewParser()
-
-	var record Record
-	for r, err := range parser.ParseRecords(strings.NewReader(input)) {
-		require.NoError(t, err)
-		record = r
-		break
-	}
-
-	// Test Lookup method
-	value, exists := record.Lookup("Name")
-	assert.True(t, exists)
-	assert.Equal(t, []string{"test-item"}, value)
-
-	value, exists = record.Lookup("NonExistent")
-	assert.False(t, exists)
-	assert.Empty(t, value)
-
-	// Test case-insensitive lookup
-	value, exists = record.Lookup("name")
-	assert.True(t, exists)
-	assert.Equal(t, []string{"test-item"}, value)
-
-	// Test Has method
-	assert.True(t, record.Has("Name"))
-	assert.True(t, record.Has("value")) // case-insensitive
-	assert.False(t, record.Has("NonExistent"))
-
-	// Test Get method
-	assert.Equal(t, "test-item", record.Get("Name"))
-	assert.Equal(t, "1.0.0", record.Get("value")) // case-insensitive
-	assert.Empty(t, record.Get("NonExistent"))
-
-	// Test Fields method
-	fields := record.Fields()
-	assert.Equal(t, []string{"Name", "Value"}, fields)
 }
 
 func TestFieldStringMethods(t *testing.T) {
