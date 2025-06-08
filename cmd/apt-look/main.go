@@ -122,6 +122,22 @@ The search is case-insensitive and matches partial strings.`,
 	},
 }
 
+// Check command
+var checkCmd = &cobra.Command{
+	Use:   "check <source>",
+	Short: "Verify repository integrity",
+	Long: `Perform integrity checks on APT repositories by verifying that files listed
+in Release file hash sections actually exist on the server. Reports missing files,
+broken references, and other repository integrity issues.`,
+	Args: cobra.ExactArgs(1),
+	Example: `  apt-look check "deb http://archive.ubuntu.com/ubuntu/ jammy main"
+  apt-look check /etc/apt/sources.list --format=json`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		source := args[0]
+		return runCheck(source, options.format)
+	},
+}
+
 func init() {
 	// Global flags available to all commands
 	rootCmd.PersistentFlags().StringVarP(&options.format, "format", "f", "text",
@@ -158,6 +174,7 @@ func init() {
 	rootCmd.AddCommand(statsCmd)
 	rootCmd.AddCommand(downloadCmd)
 	rootCmd.AddCommand(searchCmd)
+	rootCmd.AddCommand(checkCmd)
 }
 
 func loadTransports() *apttransport.Registry {
