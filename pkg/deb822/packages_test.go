@@ -366,6 +366,7 @@ func TestAllPackagesFiles(t *testing.T) {
 	for _, filePath := range files {
 		fileName := filepath.Base(filePath)
 		t.Run(fileName, func(t *testing.T) {
+			t.Parallel()
 			file, err := os.Open(filePath)
 			require.NoError(t, err, "Failed to open %s", fileName)
 			defer file.Close()
@@ -385,11 +386,6 @@ func TestAllPackagesFiles(t *testing.T) {
 				assert.Greater(t, pkg.Size, int64(0), "%s package %d should have positive Size", fileName, packageCount+1)
 
 				packageCount++
-
-				// For performance, limit testing to first 50 packages per file
-				if packageCount >= 50 {
-					break
-				}
 			}
 
 			require.Greater(t, packageCount, 0, "No packages found in %s", fileName)
