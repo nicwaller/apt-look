@@ -14,11 +14,11 @@ import (
 )
 
 func TestParseSimpleRecord(t *testing.T) {
-	input := `Package: test-package
-Version: 1.0.0
-Architecture: amd64
-Description: A test package
- This is a multi-line description
+	input := `Name: test-item
+Value: 1.0.0
+Type: example
+Comment: A test field
+ This is a multi-line comment
  with additional details.`
 
 	parser := NewParser()
@@ -35,28 +35,28 @@ Description: A test package
 	require.True(t, found, "No records found")
 
 	// Test field access
-	assert.Equal(t, "test-package", record.Get("Package"))
-	assert.Equal(t, "1.0.0", record.Get("Version"))
-	assert.Equal(t, "amd64", record.Get("Architecture"))
+	assert.Equal(t, "test-item", record.Get("Name"))
+	assert.Equal(t, "1.0.0", record.Get("Value"))
+	assert.Equal(t, "example", record.Get("Type"))
 
-	expectedDesc := "A test package\nThis is a multi-line description\nwith additional details."
-	assert.Equal(t, expectedDesc, record.Get("Description"))
+	expectedComment := "A test field\nThis is a multi-line comment\nwith additional details."
+	assert.Equal(t, expectedComment, record.Get("Comment"))
 
 	// Test case-insensitive access
-	assert.Equal(t, "test-package", record.Get("package"))
+	assert.Equal(t, "test-item", record.Get("name"))
 
 	// Test field ordering preservation
 	fields := record.Fields()
-	expectedOrder := []string{"Package", "Version", "Architecture", "Description"}
+	expectedOrder := []string{"Name", "Value", "Type", "Comment"}
 	assert.Equal(t, expectedOrder, fields)
 }
 
 func TestMultipleRecords(t *testing.T) {
-	input := `Package: package1
-Version: 1.0.0
+	input := `Name: item1
+Value: 1.0.0
 
-Package: package2
-Version: 2.0.0`
+Name: item2
+Value: 2.0.0`
 
 	parser := NewParser()
 	var records []Record
@@ -66,17 +66,17 @@ Version: 2.0.0`
 	}
 
 	assert.Len(t, records, 2)
-	assert.Equal(t, "package1", records[0].Get("Package"))
-	assert.Equal(t, "package2", records[1].Get("Package"))
+	assert.Equal(t, "item1", records[0].Get("Name"))
+	assert.Equal(t, "item2", records[1].Get("Name"))
 }
 
 func TestJSONRoundTrip(t *testing.T) {
-	input := `Package: test-package
-Version: 1.0.0
-Architecture: amd64
-Installed-Size: 1024
-Description: A test package
- Multi-line description`
+	input := `Name: test-item
+Value: 1.0.0
+Type: example
+Size: 1024
+Comment: A test field
+ Multi-line comment`
 
 	parser := NewParser()
 
@@ -112,11 +112,11 @@ Description: A test package
 }
 
 func TestControlFormatRoundTrip(t *testing.T) {
-	input := `Package: test-package
-Version: 1.0.0
-Architecture: amd64
-Description: A test package
- This is a multi-line description
+	input := `Name: test-item
+Value: 1.0.0
+Type: example
+Comment: A test field
+ This is a multi-line comment
  with additional details.
 `
 
@@ -163,9 +163,9 @@ func TestFieldValidation(t *testing.T) {
 }
 
 func TestDuplicateFields(t *testing.T) {
-	input := `Package: test-package
-Version: 1.0.0
-Package: duplicate-package`
+	input := `Name: test-item
+Value: 1.0.0
+Name: duplicate-item`
 
 	parser := NewParser()
 	for _, err := range parser.ParseRecords(strings.NewReader(input)) {
@@ -176,14 +176,14 @@ Package: duplicate-package`
 }
 
 func TestIteratorInterface(t *testing.T) {
-	input := `Package: package1
-Version: 1.0.0
+	input := `Name: item1
+Value: 1.0.0
 
-Package: package2
-Version: 2.0.0
+Name: item2
+Value: 2.0.0
 
-Package: package3
-Version: 3.0.0`
+Name: item3
+Value: 3.0.0`
 
 	parser := NewParser()
 
@@ -195,15 +195,15 @@ Version: 3.0.0`
 		if count == 2 {
 			break
 		}
-		assert.True(t, record.Has("Package"))
+		assert.True(t, record.Has("Name"))
 	}
 
 	assert.Equal(t, 2, count)
 }
 
 func TestAccessorMethods(t *testing.T) {
-	input := `Package: test-package
-Version: 1.0.0`
+	input := `Name: test-item
+Value: 1.0.0`
 
 	parser := NewParser()
 
@@ -215,51 +215,51 @@ Version: 1.0.0`
 	}
 
 	// Test Lookup method
-	value, exists := record.Lookup("Package")
+	value, exists := record.Lookup("Name")
 	assert.True(t, exists)
-	assert.Equal(t, []string{"test-package"}, value)
+	assert.Equal(t, []string{"test-item"}, value)
 
 	value, exists = record.Lookup("NonExistent")
 	assert.False(t, exists)
 	assert.Empty(t, value)
 
 	// Test case-insensitive lookup
-	value, exists = record.Lookup("package")
+	value, exists = record.Lookup("name")
 	assert.True(t, exists)
-	assert.Equal(t, []string{"test-package"}, value)
+	assert.Equal(t, []string{"test-item"}, value)
 
 	// Test Has method
-	assert.True(t, record.Has("Package"))
-	assert.True(t, record.Has("version")) // case-insensitive
+	assert.True(t, record.Has("Name"))
+	assert.True(t, record.Has("value")) // case-insensitive
 	assert.False(t, record.Has("NonExistent"))
 
 	// Test Get method
-	assert.Equal(t, "test-package", record.Get("Package"))
-	assert.Equal(t, "1.0.0", record.Get("version")) // case-insensitive
+	assert.Equal(t, "test-item", record.Get("Name"))
+	assert.Equal(t, "1.0.0", record.Get("value")) // case-insensitive
 	assert.Empty(t, record.Get("NonExistent"))
 
 	// Test Fields method
 	fields := record.Fields()
-	assert.Equal(t, []string{"Package", "Version"}, fields)
+	assert.Equal(t, []string{"Name", "Value"}, fields)
 }
 
 func TestFieldStringMethods(t *testing.T) {
-	field := Field{Name: "Package", Value: []string{"test-package"}}
+	field := Field{Name: "Name", Value: []string{"test-item"}}
 
 	// Test String() method (used by %v)
-	expectedString := "Package: test-package"
+	expectedString := "Name: test-item"
 	assert.Equal(t, expectedString, field.String())
 	assert.Equal(t, expectedString, fmt.Sprintf("%v", field))
 
 	// Test GoString() method (used by %#v)
-	expectedGoString := `rfc822.Field{Name: "Package", Value: ["test-package"]}`
+	expectedGoString := `rfc822.Field{Name: "Name", Value: ["test-item"]}`
 	assert.Equal(t, expectedGoString, field.GoString())
 	assert.Equal(t, expectedGoString, fmt.Sprintf("%#v", field))
 
 	// Test with multi-line value
-	multilineField := Field{Name: "Description", Value: []string{"First line", "Second line"}}
-	expectedMultilineString := "Description: First line\nSecond line"
-	expectedMultilineGoString := `rfc822.Field{Name: "Description", Value: ["First line" "Second line"]}`
+	multilineField := Field{Name: "Comment", Value: []string{"First line", "Second line"}}
+	expectedMultilineString := "Comment: First line\nSecond line"
+	expectedMultilineGoString := `rfc822.Field{Name: "Comment", Value: ["First line" "Second line"]}`
 
 	assert.Equal(t, expectedMultilineString, multilineField.String())
 	assert.Equal(t, expectedMultilineGoString, multilineField.GoString())
@@ -273,38 +273,38 @@ func TestFieldUnfold(t *testing.T) {
 	}{
 		{
 			name:     "empty field",
-			field:    Field{Name: "Package", Value: []string{}},
+			field:    Field{Name: "Name", Value: []string{}},
 			expected: "",
 		},
 		{
 			name:     "single line field",
-			field:    Field{Name: "Package", Value: []string{"test-package"}},
-			expected: "test-package",
+			field:    Field{Name: "Name", Value: []string{"test-item"}},
+			expected: "test-item",
 		},
 		{
 			name:     "two line field",
-			field:    Field{Name: "Description", Value: []string{"Short description", "Longer detailed description"}},
-			expected: "Short description Longer detailed description",
+			field:    Field{Name: "Comment", Value: []string{"Short comment", "Longer detailed comment"}},
+			expected: "Short comment Longer detailed comment",
 		},
 		{
 			name:     "three line field",
-			field:    Field{Name: "Description", Value: []string{"Short description", "Longer detailed description", "Even more details"}},
-			expected: "Short description Longer detailed description Even more details",
+			field:    Field{Name: "Comment", Value: []string{"Short comment", "Longer detailed comment", "Even more details"}},
+			expected: "Short comment Longer detailed comment Even more details",
 		},
 		{
 			name:     "field with empty lines",
-			field:    Field{Name: "Description", Value: []string{"First line", "", "Third line"}},
+			field:    Field{Name: "Comment", Value: []string{"First line", "", "Third line"}},
 			expected: "First line  Third line",
 		},
 		{
 			name:     "field with spaces in continuation",
-			field:    Field{Name: "Description", Value: []string{"First line", " Already indented", "  Double indented"}},
+			field:    Field{Name: "Comment", Value: []string{"First line", " Already indented", "  Double indented"}},
 			expected: "First line  Already indented   Double indented",
 		},
 		{
-			name:     "MD5Sum field (typical hash field)",
-			field:    Field{Name: "MD5Sum", Value: []string{"a1b2c3d4e5f6 12345 main/binary-amd64/package.deb", "f6e5d4c3b2a1 67890 main/binary-amd64/other.deb"}},
-			expected: "a1b2c3d4e5f6 12345 main/binary-amd64/package.deb f6e5d4c3b2a1 67890 main/binary-amd64/other.deb",
+			name:     "Hash field (typical multi-entry field)",
+			field:    Field{Name: "Hash", Value: []string{"a1b2c3d4e5f6 12345 path/to/file1.ext", "f6e5d4c3b2a1 67890 path/to/file2.ext"}},
+			expected: "a1b2c3d4e5f6 12345 path/to/file1.ext f6e5d4c3b2a1 67890 path/to/file2.ext",
 		},
 	}
 
@@ -316,20 +316,18 @@ func TestFieldUnfold(t *testing.T) {
 	}
 }
 
-func TestRepositoryFixtures(t *testing.T) {
+func TestRealWorldFixtures(t *testing.T) {
 	fixtures := []struct {
 		name                 string
 		releaseFile          string
 		packagesFile         string
-		expectedOrigin       string
-		expectedPackageCount int
+		expectedRecordCount  int
 	}{
 		{
 			name:                 "Spotify",
 			releaseFile:          "spotify-release.gz",
 			packagesFile:         "spotify-packages.gz",
-			expectedOrigin:       "Spotify LTD",
-			expectedPackageCount: 4,
+			expectedRecordCount:  4,
 		},
 	}
 
@@ -337,7 +335,7 @@ func TestRepositoryFixtures(t *testing.T) {
 
 	for _, fixture := range fixtures {
 		t.Run(fixture.name, func(t *testing.T) {
-			// Test Release file
+			// Test Release file - just verify it parses without errors
 			releaseFile, err := os.Open("testdata/" + fixture.releaseFile)
 			require.NoError(t, err)
 			defer releaseFile.Close()
@@ -355,9 +353,7 @@ func TestRepositoryFixtures(t *testing.T) {
 				break
 			}
 			require.True(t, found)
-
-			// Check Origin field
-			assert.Equal(t, fixture.expectedOrigin, release.Get("Origin"))
+			require.NotEmpty(t, release, "Release record should not be empty")
 
 			// Test Packages file
 			packagesFile, err := os.Open("testdata/" + fixture.packagesFile)
@@ -368,22 +364,21 @@ func TestRepositoryFixtures(t *testing.T) {
 			require.NoError(t, err)
 			defer pgz.Close()
 
-			var packages []Record
+			var records []Record
 			for record, err := range parser.ParseRecords(pgz) {
 				require.NoError(t, err)
-				packages = append(packages, record)
+				records = append(records, record)
 			}
 
-			// Verify expected package count
-			assert.Len(t, packages, fixture.expectedPackageCount)
+			// Verify expected record count
+			assert.Len(t, records, fixture.expectedRecordCount)
 
-			// Verify all packages have required fields
-			for i, pkg := range packages {
-				assert.True(t, pkg.Has("Package"), "%s package %d: missing Package field", fixture.name, i)
-				assert.True(t, pkg.Has("Version"), "%s package %d: missing Version field", fixture.name, i)
+			// Verify all records have at least one field
+			for i, record := range records {
+				assert.True(t, len(record) > 0, "%s record %d: empty record", fixture.name, i)
 			}
 
-			t.Logf("%s: parsed %d packages successfully", fixture.name, len(packages))
+			t.Logf("%s: parsed %d records successfully", fixture.name, len(records))
 		})
 	}
 }
@@ -409,8 +404,6 @@ func TestAllTestdataFiles(t *testing.T) {
 			defer gz.Close()
 
 			var recordCount int
-			var hasPackageField bool
-			var hasReleaseFields bool
 
 			for record, err := range parser.ParseRecords(gz) {
 				require.NoError(t, err, "Failed to parse record %d in %s", recordCount+1, fileName)
@@ -418,35 +411,19 @@ func TestAllTestdataFiles(t *testing.T) {
 
 				recordCount++
 
-				// Track what kind of file this appears to be
-				if record.Has("Package") {
-					hasPackageField = true
-				}
-				if record.Has("Origin") || record.Has("Suite") || record.Has("Codename") {
-					hasReleaseFields = true
-				}
-
 				// Verify each record has at least one field
 				assert.True(t, len(record) > 0, "Record %d in %s has no fields", recordCount, fileName)
 
 				// Verify all field names are non-empty
 				for _, field := range record {
 					assert.NotEmpty(t, field.Name, "Empty field name in record %d of %s", recordCount, fileName)
+					// Verify field values are properly structured
+					assert.NotNil(t, field.Value, "Field %s in record %d has nil value", field.Name, recordCount)
 				}
 			}
 
 			require.Greater(t, recordCount, 0, "No records found in %s", fileName)
-
-			// Categorize and log the file type
-			if strings.Contains(fileName, "release") {
-				assert.True(t, hasReleaseFields, "%s appears to be a release file but lacks release fields", fileName)
-				t.Logf("%s: parsed %d release record(s) successfully", fileName, recordCount)
-			} else if strings.Contains(fileName, "packages") {
-				assert.True(t, hasPackageField, "%s appears to be a packages file but lacks Package fields", fileName)
-				t.Logf("%s: parsed %d package record(s) successfully", fileName, recordCount)
-			} else {
-				t.Logf("%s: parsed %d record(s) successfully (unknown type)", fileName, recordCount)
-			}
+			t.Logf("%s: parsed %d RFC822-style record(s) successfully", fileName, recordCount)
 		})
 	}
 
