@@ -2,6 +2,7 @@ package apt
 
 import (
 	"context"
+	"net/url"
 	"path/filepath"
 	"testing"
 
@@ -88,4 +89,63 @@ func TestMount_HTTPSURL(t *testing.T) {
 		_ = pkg // Use the variable to avoid unused variable error
 	}
 	assert.Equal(t, 0, packageCount, "Empty repository should have no packages")
+}
+
+func TestMountURL_FileURL(t *testing.T) {
+	// Get absolute path to our test repository
+	testRepoPath, err := filepath.Abs("testdata/emptyrepo")
+	require.NoError(t, err)
+
+	// Create URL
+	repoURL, err := url.Parse("file://" + testRepoPath)
+	require.NoError(t, err)
+
+	// Test apt.MountURL() with default components
+	repo, err := MountURL(repoURL, "stable")
+	require.NoError(t, err)
+	assert.NotNil(t, repo)
+
+	// Verify the repository was opened correctly
+	assert.Equal(t, "file", repo.archiveRoot.Scheme)
+	assert.Equal(t, testRepoPath, repo.archiveRoot.Path)
+	assert.Contains(t, repo.components, "main") // should default to ["main"]
+	assert.Len(t, repo.components, 1)
+
+	// Test that we can fetch the Release file
+	ctx := context.Background()
+	release, err := repo.Update(ctx)
+	require.NoError(t, err)
+	assert.NotNil(t, release)
+
+	// Verify Release file content
+	assert.Equal(t, "Test Repository", release.Origin)
+	assert.Equal(t, "stable", release.Suite)
+}
+
+func TestMountURL_HTTPSURL(t *testing.T) {
+	// Create URL for S3-hosted repository
+	repoURL, err := url.Parse("https://nicwaller-apt.s3.ca-central-1.amazonaws.com")
+	require.NoError(t, err)
+
+	// Test apt.MountURL() with explicit components
+	repo, err := MountURL(repoURL, "stable", "main", "contrib")
+	require.NoError(t, err)
+	assert.NotNil(t, repo)
+
+	// Verify the repository was opened correctly
+	assert.Equal(t, "https", repo.archiveRoot.Scheme)
+	assert.Equal(t, "nicwaller-apt.s3.ca-central-1.amazonaws.com", repo.archiveRoot.Host)
+	assert.Contains(t, repo.components, "main")
+	assert.Contains(t, repo.components, "contrib")
+	assert.Len(t, repo.components, 2)
+
+	// Test that we can fetch the Release file
+	ctx := context.Background()
+	release, err := repo.Update(ctx)
+	require.NoError(t, err)
+	assert.NotNil(t, release)
+
+	// Verify Release file content matches our uploaded repository
+	assert.Equal(t, "Test Repository", release.Origin)
+	assert.Equal(t, "stable", release.Suite)
 }

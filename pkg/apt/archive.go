@@ -70,6 +70,25 @@ func Mount(source sources.Entry) (*Repository, error) {
 	return r, nil
 }
 
+// MountURL is a convenience function that creates a Repository from basic parameters.
+// It creates a "deb" type source entry with the specified components.
+// If no components are provided, it defaults to ["main"].
+func MountURL(archiveRoot *url.URL, distribution string, components ...string) (*Repository, error) {
+	if len(components) == 0 {
+		components = []string{"main"}
+	}
+
+	entry := sources.Entry{
+		Type:         sources.SourceTypeDeb,
+		ArchiveRoot:  archiveRoot,
+		Distribution: distribution,
+		Components:   components,
+		Options:      make(map[string]string),
+	}
+
+	return Mount(entry)
+}
+
 func detectDebianArch() []string {
 	switch runtime.GOARCH {
 	case "amd64":
