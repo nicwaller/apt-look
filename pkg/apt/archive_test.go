@@ -119,7 +119,7 @@ func TestMountURL_HTTPSURL(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test apt.MountURL() with explicit components - should succeed and validate repository
-	repo, err := MountURL(repoURL, "stable", "main", "contrib")
+	repo, err := MountURL(repoURL, "stable", WithComponents("main", "contrib"))
 	require.NoError(t, err)
 	assert.NotNil(t, repo)
 

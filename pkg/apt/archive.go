@@ -36,7 +36,33 @@ type Repository struct {
 // curiously, a single source line with multiple components can yield
 // multiple repositories, each with their own Release file
 
-func Mount(source sources.Entry) (*Repository, error) {
+// MountOptions contains configuration options for mounting a repository
+type MountOptions struct {
+	Architectures []string
+	Components    []string
+}
+
+// MountOption is a functional option for configuring Mount behavior
+type MountOption func(*MountOptions)
+
+// WithArchitectures sets the target architectures for the repository
+func WithArchitectures(architectures ...string) MountOption {
+	return func(opts *MountOptions) {
+		opts.Architectures = architectures
+	}
+}
+
+func Mount(source sources.Entry, optFns ...MountOption) (*Repository, error) {
+	opts := &MountOptions{}
+	for _, fn := range optFns {
+		fn(opts)
+	}
+
+	// Use provided architectures or detect from system
+	architectures := opts.Architectures
+	if len(architectures) == 0 {
+		architectures = detectDebianArch()
+	}
 	var err error
 	var tpt apttransport.Transport
 
@@ -82,7 +108,7 @@ func Mount(source sources.Entry) (*Repository, error) {
 		distRoot:      distRoot,
 		release:       release, // Now populated during mount
 		components:    slices.Clone(source.Components),
-		architectures: detectDebianArch(), // TODO: allow override with --arch flag
+		architectures: architectures,
 	}
 
 	return r, nil
@@ -94,10 +120,22 @@ func (r *Repository) Release() *deb822.Release {
 	return r.release
 }
 
+// WithComponents sets the components for MountURL (adds to MountOptions)
+func WithComponents(components ...string) MountOption {
+	return func(opts *MountOptions) {
+		opts.Components = components
+	}
+}
+
 // MountURL is a convenience function that creates a Repository from basic parameters.
-// It creates a "deb" type source entry with the specified components.
-// If no components are provided, it defaults to ["main"].
-func MountURL(archiveRoot *url.URL, distribution string, components ...string) (*Repository, error) {
+// It creates a "deb" type source entry with the specified options.
+func MountURL(archiveRoot *url.URL, distribution string, optFns ...MountOption) (*Repository, error) {
+	opts := &MountOptions{}
+	for _, fn := range optFns {
+		fn(opts)
+	}
+
+	components := opts.Components
 	if len(components) == 0 {
 		components = []string{"main"}
 	}
@@ -110,7 +148,7 @@ func MountURL(archiveRoot *url.URL, distribution string, components ...string) (
 		Options:      make(map[string]string),
 	}
 
-	return Mount(entry)
+	return Mount(entry, optFns...)
 }
 
 // Discover attempts to find valid distributions and components in an APT repository

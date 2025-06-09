@@ -66,7 +66,7 @@ func runCheck(sourceStr, format string) error {
 	// Use the first source when multiple are discovered
 	source := sources[0]
 	if len(sources) > 1 {
-		log.Info().Msgf("Multiple sources discovered, using: %s %s %v", 
+		log.Info().Msgf("Multiple sources discovered, using: %s %s %v",
 			source.Type, source.ArchiveRoot.String(), source.Components)
 	}
 	//log.Info().Msgf("Checking repository integrity: %v", source)
@@ -100,7 +100,7 @@ func runCheck(sourceStr, format string) error {
 func performIntegrityCheck(source sources.Entry) (*CheckResult, error) {
 	result := &CheckResult{}
 
-	repo, err := apt.Mount(source)
+	repo, err := apt.Mount(source, buildMountOptions()...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to mount repository: %w", err)
 	}

@@ -19,6 +19,7 @@ var options struct {
 	format string
 	output string
 	debug  bool
+	arch   []string
 }
 
 // Root command
@@ -170,6 +171,8 @@ func init() {
 		"Output format (text, json, tsv, raw)")
 	rootCmd.PersistentFlags().BoolVar(&options.debug, "debug", false,
 		"Enable debug logging")
+	rootCmd.PersistentFlags().StringSliceVar(&options.arch, "arch", nil,
+		"Target architectures (e.g., amd64,arm64). Defaults to current system architecture.")
 
 	// Command-specific flags
 	downloadCmd.Flags().StringVarP(&options.output, "output", "o", ".",
@@ -265,6 +268,15 @@ func parseSourceInput(source string) ([]sources.Entry, error) {
 	}
 
 	return []sources.Entry{*entry}, nil
+}
+
+// buildMountOptions creates mount options from global flags
+func buildMountOptions() []apt.MountOption {
+	var opts []apt.MountOption
+	if len(options.arch) > 0 {
+		opts = append(opts, apt.WithArchitectures(options.arch...))
+	}
+	return opts
 }
 
 func runDownload(source, packageName, outputPath string) error {

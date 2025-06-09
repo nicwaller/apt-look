@@ -20,7 +20,7 @@ func runStats(sources []sources.Entry, format string) error {
 	// Use the first source when multiple are discovered
 	source := sources[0]
 	if len(sources) > 1 {
-		log.Info().Msgf("Multiple sources discovered, using: %s %s %v", 
+		log.Info().Msgf("Multiple sources discovered, using: %s %s %v",
 			source.Type, source.ArchiveRoot.String(), source.Components)
 	}
 	log.Info().Msgf("Getting statistics for: %v", source)

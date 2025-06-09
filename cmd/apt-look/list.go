@@ -32,7 +32,7 @@ func runList(source, format string) error {
 	packageNames := make(map[string]bool) // for deduplication
 
 	for _, src := range sourceList {
-		repo, err := apt.Mount(src)
+		repo, err := apt.Mount(src, buildMountOptions()...)
 		if err != nil {
 			return fmt.Errorf("failed to mount repository: %w", err)
 		}
@@ -57,7 +57,7 @@ func runList(source, format string) error {
 	// Check if no packages were found and warn about architecture mismatch
 	if len(packageNames) == 0 {
 		for _, src := range sourceList {
-			repo, err := apt.Mount(src)
+			repo, err := apt.Mount(src, buildMountOptions()...)
 			if err != nil {
 				continue
 			}
