@@ -155,6 +155,7 @@ func (r *Repository) Packages(ctx context.Context) iter.Seq2[*deb822.Package, er
 				rdr, _, err := r.Fetch(ctx, r.distRoot.JoinPath(fi.Path))
 				if err != nil {
 					yield(nil, fmt.Errorf("failed to fetch Packages file %s: %w", fi.Path, err))
+					return
 				}
 				for pkg, err := range deb822.ParsePackages(rdr) {
 					if err != nil {
