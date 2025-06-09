@@ -97,13 +97,11 @@ func performIntegrityCheck(source sources.Entry) (*CheckResult, error) {
 
 	repo, err := apt.Mount(source)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open repository: %w", err)
+		return nil, fmt.Errorf("failed to mount repository: %w", err)
 	}
 
-	release, err := repo.Update(context.TODO())
-	if err != nil {
-		return nil, fmt.Errorf("failed to update repository: %w", err)
-	}
+	// Release file is already fetched during mount
+	release := repo.Release()
 
 	// Fill repository info
 	result.Repository.Origin = release.Origin

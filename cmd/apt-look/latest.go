@@ -34,13 +34,9 @@ func runLatest(source, format string) error {
 	for _, src := range sourceList {
 		repo, err := apt.Mount(src)
 		if err != nil {
-			return fmt.Errorf("failed to open repository: %w", err)
+			return fmt.Errorf("failed to mount repository: %w", err)
 		}
 		ctx := context.TODO()
-		_, err = repo.Update(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to update repository: %w", err)
-		}
 
 		count := 0
 		for pkg, err := range repo.Packages(ctx) {
@@ -71,12 +67,7 @@ func runLatest(source, format string) error {
 			if err != nil {
 				continue
 			}
-			ctx := context.TODO()
-			_, err = repo.Update(ctx)
-			if err != nil {
-				continue
-			}
-			
+
 			availableArchs := repo.GetAvailableArchitectures(src.Components)
 			if len(availableArchs) > 0 {
 				log.Warn().Msgf("No packages found for current architecture. Available architectures: %v", availableArchs)
