@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestOpen_FileURL(t *testing.T) {
+func TestMount_FileURL(t *testing.T) {
 	// Get absolute path to our test repository
 	testRepoPath, err := filepath.Abs("testdata/emptyrepo")
 	require.NoError(t, err)
@@ -20,8 +20,8 @@ func TestOpen_FileURL(t *testing.T) {
 	entry, err := sources.ParseSourceLine(sourceLine, 1)
 	require.NoError(t, err)
 
-	// Test apt.Open()
-	repo, err := Open(*entry)
+	// Test apt.Mount()
+	repo, err := Mount(*entry)
 	require.NoError(t, err)
 	assert.NotNil(t, repo)
 
@@ -52,14 +52,14 @@ func TestOpen_FileURL(t *testing.T) {
 	assert.Equal(t, 0, packageCount, "Empty repository should have no packages")
 }
 
-func TestOpen_HTTPSURL(t *testing.T) {
+func TestMount_HTTPSURL(t *testing.T) {
 	// Create a source entry with HTTPS URL pointing to our S3-hosted repository
 	sourceLine := "deb https://nicwaller-apt.s3.ca-central-1.amazonaws.com stable main"
 	entry, err := sources.ParseSourceLine(sourceLine, 1)
 	require.NoError(t, err)
 
-	// Test apt.Open()
-	repo, err := Open(*entry)
+	// Test apt.Mount()
+	repo, err := Mount(*entry)
 	require.NoError(t, err)
 	assert.NotNil(t, repo)
 

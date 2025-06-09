@@ -34,7 +34,7 @@ type Repository struct {
 // curiously, a single source line with multiple components can yield
 // multiple repositories, each with their own Release file
 
-func Open(source sources.Entry) (*Repository, error) {
+func Mount(source sources.Entry) (*Repository, error) {
 	var err error
 	var tpt apttransport.Transport
 

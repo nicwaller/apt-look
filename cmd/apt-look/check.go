@@ -95,7 +95,7 @@ func runCheck(sourceStr, format string) error {
 func performIntegrityCheck(source sources.Entry) (*CheckResult, error) {
 	result := &CheckResult{}
 
-	repo, err := apt.Open(source)
+	repo, err := apt.Mount(source)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open repository: %w", err)
 	}

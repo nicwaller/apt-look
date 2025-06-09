@@ -32,7 +32,7 @@ func runList(source, format string) error {
 	packageNames := make(map[string]bool) // for deduplication
 
 	for _, src := range sourceList {
-		repo, err := apt.Open(src)
+		repo, err := apt.Mount(src)
 		if err != nil {
 			return fmt.Errorf("failed to open repository: %w", err)
 		}
@@ -61,7 +61,7 @@ func runList(source, format string) error {
 	// Check if no packages were found and warn about architecture mismatch
 	if len(packageNames) == 0 {
 		for _, src := range sourceList {
-			repo, err := apt.Open(src)
+			repo, err := apt.Mount(src)
 			if err != nil {
 				continue
 			}

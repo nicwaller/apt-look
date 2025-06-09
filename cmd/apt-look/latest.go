@@ -32,7 +32,7 @@ func runLatest(source, format string) error {
 	latestPackages := make(map[PackageKey]*deb822.Package)
 
 	for _, src := range sourceList {
-		repo, err := apt.Open(src)
+		repo, err := apt.Mount(src)
 		if err != nil {
 			return fmt.Errorf("failed to open repository: %w", err)
 		}
@@ -67,7 +67,7 @@ func runLatest(source, format string) error {
 	// Check if no packages were found and warn about architecture mismatch
 	if len(latestPackages) == 0 {
 		for _, src := range sourceList {
-			repo, err := apt.Open(src)
+			repo, err := apt.Mount(src)
 			if err != nil {
 				continue
 			}
