@@ -118,6 +118,21 @@ The search is case-insensitive and matches partial strings.`,
 	},
 }
 
+// Latest command
+var latestCmd = &cobra.Command{
+	Use:   "latest <source>",
+	Short: "Show the latest version of each package",
+	Long: `Show information about the highest version available for each package.
+Packages are grouped by (name, architecture) tuple and only the latest version is shown.`,
+	Args: cobra.ExactArgs(1),
+	Example: `  apt-look latest "deb http://archive.ubuntu.com/ubuntu/ jammy main"
+  apt-look latest /etc/apt/sources.list --format=json`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		source := args[0]
+		return runLatest(source, options.format)
+	},
+}
+
 // Check command
 var checkCmd = &cobra.Command{
 	Use:   "check <source>",
@@ -183,6 +198,7 @@ func init() {
 	rootCmd.AddCommand(statsCmd)
 	rootCmd.AddCommand(downloadCmd)
 	rootCmd.AddCommand(searchCmd)
+	rootCmd.AddCommand(latestCmd)
 	rootCmd.AddCommand(checkCmd)
 	rootCmd.AddCommand(purgeCacheCmd)
 }
