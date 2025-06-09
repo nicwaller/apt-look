@@ -1,0 +1,15 @@
+Origin: Test Repository
+Label: Test Repo
+Suite: stable
+Codename: stable
+Version: 1.0
+Architectures: amd64
+Components: main
+Description: Empty test repository for apt-look testing
+Date: Mon, 09 Jun 2025 12:00:00 UTC
+SHA256:
+ e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b334ca495991b7852b855        0 main/binary-amd64/Packages
+ 9a43dc1f54cad06ffd8d2777b92806377a4cb36f5baf5cf86214b42e8d9dc460       29 main/binary-amd64/Packages.gz
+MD5Sum:
+ d41d8cd98f00b204e9800998ecf8427e        0 main/binary-amd64/Packages
+ 4360d7145f6f4752cf7c08f0bdab3cbd       29 main/binary-amd64/Packages.gz
