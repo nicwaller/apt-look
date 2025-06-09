@@ -40,6 +40,8 @@ type Repository struct {
 type MountOptions struct {
 	Architectures []string
 	Components    []string
+	Transport     apttransport.Transport
+	Registry      *apttransport.Registry
 }
 
 // MountOption is a functional option for configuring Mount behavior
@@ -49,6 +51,20 @@ type MountOption func(*MountOptions)
 func WithArchitectures(architectures ...string) MountOption {
 	return func(opts *MountOptions) {
 		opts.Architectures = architectures
+	}
+}
+
+// WithTransport sets a specific transport to use for the repository
+func WithTransport(transport apttransport.Transport) MountOption {
+	return func(opts *MountOptions) {
+		opts.Transport = transport
+	}
+}
+
+// WithRegistry sets a specific transport registry to use for the repository
+func WithRegistry(registry *apttransport.Registry) MountOption {
+	return func(opts *MountOptions) {
+		opts.Registry = registry
 	}
 }
 
@@ -63,13 +79,23 @@ func Mount(source sources.Entry, optFns ...MountOption) (*Repository, error) {
 	if len(architectures) == 0 {
 		architectures = detectDebianArch()
 	}
+
+	// Use provided transport, or select from registry, or use default registry
 	var err error
 	var tpt apttransport.Transport
 
-	scheme := source.ArchiveRoot.Scheme
-	tpt, err = apttransport.DefaultRegistry.Select(scheme)
-	if err != nil {
-		return nil, fmt.Errorf("unsupported transport %q: %w", scheme, err)
+	if opts.Transport != nil {
+		tpt = opts.Transport
+	} else {
+		scheme := source.ArchiveRoot.Scheme
+		registry := opts.Registry
+		if registry == nil {
+			registry = apttransport.DefaultRegistry
+		}
+		tpt, err = registry.Select(scheme)
+		if err != nil {
+			return nil, fmt.Errorf("unsupported transport %q: %w", scheme, err)
+		}
 	}
 
 	var distRoot *url.URL

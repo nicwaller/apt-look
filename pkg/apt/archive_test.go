@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/nicwaller/apt-look/pkg/apt/apttransport"
 	"github.com/nicwaller/apt-look/pkg/apt/sources"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -313,4 +314,39 @@ func TestTryParseDistRoot(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestMount_WithCustomTransport(t *testing.T) {
+	// Get absolute path to our test repository
+	testRepoPath, err := filepath.Abs("testdata/emptyrepo")
+	require.NoError(t, err)
+
+	// Create a source entry with file:// URL
+	sourceLine := "deb file://" + testRepoPath + " stable main"
+	entry, err := sources.ParseSourceLine(sourceLine, 1)
+	require.NoError(t, err)
+
+	// Create a custom transport registry for testing
+	customRegistry := apttransport.NewRegistry()
+	customRegistry.Register(apttransport.NewFileTransport())
+
+	// Test apt.Mount() with custom registry - should succeed
+	repo, err := Mount(*entry, WithRegistry(customRegistry), WithArchitectures("amd64"))
+	require.NoError(t, err)
+	assert.NotNil(t, repo)
+
+	// Verify the repository was opened correctly
+	assert.Equal(t, "file", repo.archiveRoot.Scheme)
+	assert.Equal(t, testRepoPath, repo.archiveRoot.Path)
+	assert.Contains(t, repo.components, "main")
+
+	// Test with a specific transport instance
+	fileTransport := apttransport.NewFileTransport()
+	repo2, err := Mount(*entry, WithTransport(fileTransport), WithArchitectures("arm64"))
+	require.NoError(t, err)
+	assert.NotNil(t, repo2)
+
+	// Should work the same way
+	assert.Equal(t, "file", repo2.archiveRoot.Scheme)
+	assert.Equal(t, testRepoPath, repo2.archiveRoot.Path)
 }
