@@ -174,7 +174,7 @@ func (c *CacheTransport) PurgeCache() error {
 }
 
 func (c *CacheTransport) getCacheKey(uri *url.URL) string {
-	// Use MD5 hash of the URI as cache key
+	// Use MD5 hash of the archiveRoot as cache key
 	hash := md5.Sum([]byte(uri.String()))
 	return fmt.Sprintf("%x", hash)
 }
@@ -253,11 +253,11 @@ func (c *CacheTransport) cacheResponse(resp *AcquireResponse, cachePath string, 
 		return resp, nil
 	}
 
-	// Update response with new content reader
+	// update response with new content reader
 	resp.Content = io.NopCloser(strings.NewReader(string(content)))
 	resp.Size = int64(len(content))
 
-	// Update hash if not already set
+	// update hash if not already set
 	if resp.Hashes == nil {
 		resp.Hashes = make(map[string]string)
 	}

@@ -1,19 +1,16 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/rs/zerolog/log"
 
+	apttransport2 "github.com/nicwaller/apt-look/pkg/apt/apttransport"
 	"github.com/nicwaller/apt-look/pkg/apt/sources"
-	"github.com/nicwaller/apt-look/pkg/apttransport"
-	"github.com/nicwaller/apt-look/pkg/deb822"
 )
 
 func runStats(sources []sources.Entry, format string) error {
@@ -21,11 +18,7 @@ func runStats(sources []sources.Entry, format string) error {
 		return fmt.Errorf("expected 1 source, got %d", len(sources))
 	}
 	source := sources[0]
-	log.Info().Msgf("Getting statistics for: %s", source.String())
-
-	if !source.Enabled {
-		return fmt.Errorf("source is disabled")
-	}
+	log.Info().Msgf("Getting statistics for: %v", source)
 
 	// Calculate statistics
 	stats, registry, err := calculateRepositoryStats(source)
@@ -77,91 +70,9 @@ type RepositoryStats struct {
 	} `json:"packages"`
 }
 
-func calculateRepositoryStats(source sources.Entry) (*RepositoryStats, *apttransport.Registry, error) {
-	stats := &RepositoryStats{}
-
-	// Use the transport registry with caching
-	registry := loadTransports()
-
-	// Fetch Release file
-	releaseURL := strings.TrimSuffix(source.URI, "/") + "/dists/" + source.Distribution + "/Release"
-	parsedURL, err := url.Parse(releaseURL)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to parse Release URL %s: %w", releaseURL, err)
-	}
-
-	ctx := context.Background()
-	resp, err := registry.Acquire(ctx, &apttransport.AcquireRequest{
-		URI:     parsedURL,
-		Timeout: 30 * time.Second,
-	})
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to fetch Release file from %s: %w", releaseURL, err)
-	}
-	defer resp.Content.Close()
-
-	release, err := deb822.ParseRelease(resp.Content)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to parse Release file: %w", err)
-	}
-
-	// Fill repository info from Release file
-	stats.Repository.Origin = release.Origin
-	stats.Repository.Label = release.Label
-	stats.Repository.Suite = release.Suite
-	stats.Repository.Codename = release.Codename
-	stats.Repository.Date = release.Date
-	stats.Repository.Architectures = release.Architectures
-	stats.Repository.Components = release.Components
-
-	// Initialize counters
-	stats.Packages.ByArchitecture = make(map[string]int)
-	stats.Packages.ByComponent = make(map[string]int)
-	stats.Packages.BySection = make(map[string]int)
-	stats.Packages.ByPriority = make(map[string]int)
-
-	// Fetch and parse Packages files based on what's actually available in the Release file
-	for _, component := range source.Components {
-		if component == "" {
-			continue
-		}
-
-		for _, arch := range release.Architectures {
-			if arch == "source" {
-				continue // Skip source architecture for binary package stats
-			}
-
-			// Check if Packages files exist for this component/architecture combination
-			packagesFiles := release.GetPackagesFiles(component, arch)
-			if len(packagesFiles) == 0 {
-				log.Debug().Msgf("No Packages files found for %s/%s", component, arch)
-				continue
-			}
-
-			// Process the first available Packages file (prefer compressed)
-			var fileToProcess *deb822.FileInfo
-			for _, file := range packagesFiles {
-				if file.Compressed {
-					fileToProcess = &file
-					break
-				}
-			}
-			if fileToProcess == nil {
-				fileToProcess = &packagesFiles[0] // Use first available if no compressed version
-			}
-
-			err := processPackagesFileFromRelease(registry, source, *fileToProcess, stats)
-			if err != nil {
-				log.Warn().Err(err).Msgf("Failed to process packages for %s/%s", component, arch)
-				continue
-			}
-		}
-	}
-
-	// Calculate derived statistics
-	stats.Packages.TotalSizeMB = stats.Packages.TotalSize / (1024 * 1024)
-
-	return stats, registry, nil
+func calculateRepositoryStats(source sources.Entry) (*RepositoryStats, *apttransport2.Registry, error) {
+	// TODO: implement this again
+	panic("not yet implemented")
 }
 
 func outputStats(source sources.Entry, stats *RepositoryStats, format string) error {
@@ -287,14 +198,9 @@ func formatPrometheusMetric(name string, labels map[string]string, value float64
 }
 
 func outputStatsPrometheus(source sources.Entry, stats *RepositoryStats) error {
-	purl, err := url.Parse(source.URI)
-	if err != nil {
-		return fmt.Errorf("failed to parse source.URI: %w", err)
-	}
-
 	labels := map[string]string{
-		"host":         purl.Host,
-		"path":         purl.Path,
+		"host":         source.ArchiveRoot.Host,
+		"path":         source.ArchiveRoot.Path,
 		"distribution": source.Distribution,
 		"origin":       stats.Repository.Origin,
 		"label":        stats.Repository.Label,

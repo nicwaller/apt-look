@@ -26,7 +26,7 @@ func (t *FileTransport) Schemes() []string {
 }
 
 func (t *FileTransport) Acquire(ctx context.Context, req *AcquireRequest) (*AcquireResponse, error) {
-	// Convert file:// URI to local path
+	// Convert file:// archiveRoot to local path
 	path := req.URI.Path
 	if req.URI.Host != "" {
 		// Handle file://host/path format (though host should be empty for local files)

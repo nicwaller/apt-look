@@ -12,8 +12,9 @@ import (
 
 	"github.com/rs/zerolog/log"
 
+	"github.com/nicwaller/apt-look/pkg/apt"
+	apttransport2 "github.com/nicwaller/apt-look/pkg/apt/apttransport"
 	"github.com/nicwaller/apt-look/pkg/apt/sources"
-	"github.com/nicwaller/apt-look/pkg/apttransport"
 	"github.com/nicwaller/apt-look/pkg/deb822"
 )
 
@@ -63,14 +64,10 @@ func runCheck(sourceStr, format string) error {
 		return fmt.Errorf("expected 1 source, got %d", len(sources))
 	}
 	source := sources[0]
-	log.Info().Msgf("Checking repository integrity: %s", source.String())
-
-	if !source.Enabled {
-		return fmt.Errorf("source is disabled")
-	}
+	//log.Info().Msgf("Checking repository integrity: %v", source)
 
 	// Perform the integrity check
-	result, registry, err := performIntegrityCheck(source)
+	result, err := performIntegrityCheck(source)
 	if err != nil {
 		return fmt.Errorf("failed to perform integrity check: %w", err)
 	}
@@ -82,45 +79,30 @@ func runCheck(sourceStr, format string) error {
 	}
 
 	// Display cache statistics
-	hits, misses, hitRatio := registry.GetCacheStats()
-	if hits > 0 || misses > 0 {
-		log.Info().
-			Int64("cache_hits", hits).
-			Int64("cache_misses", misses).
-			Float64("hit_ratio", hitRatio).
-			Msgf("Cache performance: %d hits, %d misses (%.1f%% hit ratio)",
-				hits, misses, hitRatio*100)
-	}
+	//hits, misses, hitRatio := registry.GetCacheStats()
+	//if hits > 0 || misses > 0 {
+	//	log.Info().
+	//		Int64("cache_hits", hits).
+	//		Int64("cache_misses", misses).
+	//		Float64("hit_ratio", hitRatio).
+	//		Msgf("Cache performance: %d hits, %d misses (%.1f%% hit ratio)",
+	//			hits, misses, hitRatio*100)
+	//}
 
 	return nil
 }
 
-func performIntegrityCheck(source sources.Entry) (*CheckResult, *apttransport.Registry, error) {
+func performIntegrityCheck(source sources.Entry) (*CheckResult, error) {
 	result := &CheckResult{}
 
-	// Use the transport registry with caching
-	registry := loadTransports()
-
-	// Fetch Release file
-	releaseURL := strings.TrimSuffix(source.URI, "/") + "/dists/" + source.Distribution + "/Release"
-	parsedURL, err := url.Parse(releaseURL)
+	repo, err := apt.Open(source)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to parse Release URL %s: %w", releaseURL, err)
+		return nil, fmt.Errorf("failed to open repository: %w", err)
 	}
 
-	ctx := context.Background()
-	resp, err := registry.Acquire(ctx, &apttransport.AcquireRequest{
-		URI:     parsedURL,
-		Timeout: 30 * time.Second,
-	})
+	release, err := repo.Update(context.TODO())
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to fetch Release file from %s: %w", releaseURL, err)
-	}
-	defer resp.Content.Close()
-
-	release, err := deb822.ParseRelease(resp.Content)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to parse Release file: %w", err)
+		return nil, fmt.Errorf("failed to update repository: %w", err)
 	}
 
 	// Fill repository info
@@ -129,7 +111,7 @@ func performIntegrityCheck(source sources.Entry) (*CheckResult, *apttransport.Re
 	result.Repository.Suite = release.Suite
 	result.Repository.Codename = release.Codename
 	result.Repository.Date = release.Date
-	result.Repository.BaseURL = strings.TrimSuffix(source.URI, "/") + "/dists/" + source.Distribution
+	result.Repository.BaseURL = repo.DistributionRoot().String()
 	result.Repository.Components = source.Components
 
 	// Get all files from Release metadata
@@ -140,7 +122,7 @@ func performIntegrityCheck(source sources.Entry) (*CheckResult, *apttransport.Re
 
 	// Check each file
 	for _, fileInfo := range allFiles {
-		checkResult := checkFile(registry, result.Repository.BaseURL, fileInfo)
+		checkResult := checkFile(repo.Transport(), result.Repository.BaseURL, fileInfo)
 
 		switch {
 		case checkResult.StatusCode == http.StatusNotFound:
@@ -157,10 +139,10 @@ func performIntegrityCheck(source sources.Entry) (*CheckResult, *apttransport.Re
 		}
 	}
 
-	return result, registry, nil
+	return result, nil
 }
 
-func checkFile(registry *apttransport.Registry, baseURL string, fileInfo deb822.FileInfo) FileCheckResult {
+func checkFile(tpt apttransport2.Transport, baseURL string, fileInfo deb822.FileInfo) FileCheckResult {
 	checkResult := FileCheckResult{
 		FileInfo: fileInfo,
 		URL:      baseURL + "/" + fileInfo.Path,
@@ -174,12 +156,12 @@ func checkFile(registry *apttransport.Registry, baseURL string, fileInfo deb822.
 
 	// Use GET request to check existence and get size
 	ctx := context.Background()
-	req := &apttransport.AcquireRequest{
+	req := &apttransport2.AcquireRequest{
 		URI:     parsedURL,
 		Timeout: 10 * time.Second,
 	}
 
-	resp, err := registry.Acquire(ctx, req)
+	resp, err := tpt.Acquire(ctx, req)
 	if err != nil {
 		// Try to extract status code from HTTP errors
 		if strings.Contains(err.Error(), "HTTP 404") {
@@ -239,15 +221,15 @@ func outputCheckResultsText(result *CheckResult) error {
 
 	// Summary
 	fmt.Printf("\nIntegrity Summary:\n")
-	fmt.Printf("  Total Files: %d\n", result.Summary.TotalFiles)
-	fmt.Printf("  Existing Files: %d\n", result.Summary.ExistingFiles)
-	fmt.Printf("  Missing Files: %d\n", result.Summary.MissingFiles)
+	fmt.Printf("  Total indexes: %d\n", result.Summary.TotalFiles)
+	fmt.Printf("  Existing indexes: %d\n", result.Summary.ExistingFiles)
+	fmt.Printf("  Missing indexes: %d\n", result.Summary.MissingFiles)
 	fmt.Printf("  Network Errors: %d\n", result.Summary.NetworkErrors)
 	fmt.Printf("  Integrity Issues: %d\n", result.Summary.IntegrityIssues)
 
 	// Missing files
 	if len(result.MissingFiles) > 0 {
-		fmt.Printf("\nMissing Files:\n")
+		fmt.Printf("\nMissing indexes:\n")
 		for _, file := range result.MissingFiles {
 			fmt.Printf("  - %s (type: %s, component: %s, arch: %s)\n",
 				file.Path, file.Type, file.Component, file.Architecture)

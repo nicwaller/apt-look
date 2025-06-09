@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"regexp"
 	"strings"
 )
@@ -30,7 +31,7 @@ func ParseSourcesList(r io.Reader) ([]Entry, error) {
 			continue
 		}
 
-		entry, err := parseSourceLine(line, lineNumber)
+		entry, err := ParseSourceLine(line, lineNumber)
 		if err != nil {
 			return nil, fmt.Errorf("line %d: %w", lineNumber, err)
 		}
@@ -45,8 +46,8 @@ func ParseSourcesList(r io.Reader) ([]Entry, error) {
 	return entries, nil
 }
 
-// parseSourceLine parses a single line from sources.list
-func parseSourceLine(line string, lineNumber int) (*Entry, error) {
+// ParseSourceLine parses a single line from sources.list
+func ParseSourceLine(line string, lineNumber int) (*Entry, error) {
 	originalLine := line
 	line = strings.TrimSpace(line)
 
@@ -95,15 +96,11 @@ func parseSourceLine(line string, lineNumber int) (*Entry, error) {
 		}, fmt.Errorf("unknown source type: %s", fields[0])
 	}
 
-	// Parse URI
+	// Parse archiveRoot
 	uri := fields[1]
-	if err := validateURI(uri); err != nil {
-		return &Entry{
-			Type:         sourceType,
-			URI:          uri,
-			originalLine: originalLine,
-			LineNumber:   lineNumber,
-		}, fmt.Errorf("invalid URI: %w", err)
+	purl, err := url.Parse(uri)
+	if err != nil {
+		return nil, fmt.Errorf("invalid archive root %q: %w", uri, err)
 	}
 
 	// Parse distribution
@@ -117,7 +114,7 @@ func parseSourceLine(line string, lineNumber int) (*Entry, error) {
 
 	return &Entry{
 		Type:         sourceType,
-		URI:          uri,
+		ArchiveRoot:  purl,
 		Distribution: distribution,
 		Components:   components,
 		Options:      options,

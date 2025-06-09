@@ -1,7 +1,6 @@
 package sources
 
 import (
-	"fmt"
 	"net/url"
 	"strings"
 )
@@ -20,10 +19,15 @@ type Entry struct {
 	// Entry type (deb or deb-src)
 	Type SourceType `json:"type"`
 
-	// Repository URI
-	URI string `json:"uri"`
+	// Repository ArchiveRoot
+	ArchiveRoot *url.URL `json:"archiveroot"`
 
 	// Distribution/Suite (e.g., "stable", "jammy", "bookworm")
+	// This may be "/" or "." if the archive uses a flat repository format
+	// A flat repository does not use the dists hierarchy of directories,
+	// and instead places meta index and indices directly into the archive root (or some part below it)
+	// In sources.list syntax, a flat repository is specified like this:
+	//    deb uri directory/
 	Distribution string `json:"distribution"`
 
 	// Components (e.g., "main", "contrib", "non-free")
@@ -37,26 +41,6 @@ type Entry struct {
 
 	// Line number in the source file
 	LineNumber int `json:"line_number,omitempty"`
-}
-
-// validateURI validates that the URI is well-formed
-func validateURI(uri string) error {
-	// Basic URI validation
-	if uri == "" {
-		return fmt.Errorf("URI cannot be empty")
-	}
-
-	// Handle special cases
-	if uri == "/" {
-		return nil // Root directory is valid for some contexts
-	}
-
-	// Try to parse as URL
-	if _, err := url.Parse(uri); err != nil {
-		return fmt.Errorf("malformed URI: %w", err)
-	}
-
-	return nil
 }
 
 // isSourceLine checks if a line looks like a source line (starts with deb or deb-src)

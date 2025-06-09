@@ -190,9 +190,9 @@ Installed-Size: invalid`,
 			input: `Package: test
 Filename: test.deb
 Size: 1000
-Phased-Update-Percentage: 150`,
+Phased-update-Percentage: 150`,
 			expectErr: true,
-			errMsg:    "Phased-Update-Percentage must be 0-100",
+			errMsg:    "Phased-update-Percentage must be 0-100",
 		},
 		{
 			name: "valid minimal package",

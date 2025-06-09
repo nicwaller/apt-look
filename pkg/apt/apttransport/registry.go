@@ -2,8 +2,17 @@ package apttransport
 
 import (
 	"context"
+	"errors"
 	"sync"
 )
+
+var DefaultRegistry = NewRegistryWithCache(CacheConfig{})
+
+func init() {
+	// TODO: do this better
+	DefaultRegistry.Register(NewHTTPTransport())
+	DefaultRegistry.Register(NewFileTransport())
+}
 
 // Registry manages multiple transport implementations with optional caching
 type Registry struct {
@@ -42,7 +51,14 @@ func (r *Registry) SetCacheConfig(config CacheConfig) {
 	r.cacheConfig = config
 }
 
-// Acquire automatically selects the appropriate transport and fetches the resource
+func (r *Registry) Select(scheme string) (Transport, error) {
+	t, ok := r.transports[scheme]
+	if !ok {
+		return nil, errors.New("invalid transport")
+	}
+	return t, nil
+}
+
 func (r *Registry) Acquire(ctx context.Context, req *AcquireRequest) (*AcquireResponse, error) {
 	r.mu.RLock()
 	transport, exists := r.transports[req.URI.Scheme]

@@ -246,7 +246,7 @@ func TestCacheTransport_CacheKeyGeneration(t *testing.T) {
 	// Keys should be different for different URIs
 	assert.NotEqual(t, key1, key2)
 
-	// Keys should be consistent for same URI
+	// Keys should be consistent for same archiveRoot
 	assert.Equal(t, key1, cache.getCacheKey(uri1))
 
 	// Keys should be MD5 hashes (32 hex characters)

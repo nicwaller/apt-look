@@ -9,10 +9,10 @@ import (
 
 // Transport represents an APT transport method (http, https, ftp, file, etc.)
 type Transport interface {
-	// Schemes returns the URI scheme this transport handles (e.g., "http", "https", "ftp")
+	// Schemes returns the archiveRoot scheme this transport handles (e.g., "http", "https", "ftp")
 	Schemes() []string
 
-	// Acquire fetches a resource from the given URI
+	// Acquire fetches a resource from the given archiveRoot
 	Acquire(ctx context.Context, req *AcquireRequest) (*AcquireResponse, error)
 }
 

@@ -3,6 +3,7 @@ package sources
 import (
 	"fmt"
 	"io"
+	"net/url"
 	"strings"
 
 	"github.com/nicwaller/apt-look/pkg/deb822"
@@ -69,7 +70,7 @@ func ParseDeb822SourcesList(r io.Reader) ([]Entry, error) {
 			}
 		}
 
-		// Generate entries for each combination of type, URI, and suite
+		// Generate entries for each combination of type, archiveRoot, and suite
 		for _, typeStr := range types {
 			sourceType := parseSourceType(typeStr)
 			if sourceType == SourceTypeUnknown {
@@ -77,14 +78,15 @@ func ParseDeb822SourcesList(r io.Reader) ([]Entry, error) {
 			}
 
 			for _, uri := range uris {
-				if err := validateURI(uri); err != nil {
-					return nil, fmt.Errorf("record %d: invalid URI %s: %w", recordNumber, uri, err)
+				purl, err := url.Parse(uri)
+				if err != nil {
+					return nil, fmt.Errorf("record %d: invalid uri %q: %w", recordNumber, uri, err)
 				}
 
 				for _, suite := range suites {
 					entry := Entry{
 						Type:         sourceType,
-						URI:          uri,
+						ArchiveRoot:  purl,
 						Distribution: suite,
 						Components:   components,
 						Options:      options,

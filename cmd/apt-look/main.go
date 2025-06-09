@@ -1,21 +1,16 @@
 package main
 
 import (
-	"compress/gzip"
-	"context"
 	"fmt"
-	"net/url"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
+	apttransport2 "github.com/nicwaller/apt-look/pkg/apt/apttransport"
 	"github.com/nicwaller/apt-look/pkg/apt/sources"
-	"github.com/nicwaller/apt-look/pkg/apttransport"
-	"github.com/nicwaller/apt-look/pkg/deb822"
 )
 
 var options struct {
@@ -192,32 +187,17 @@ func init() {
 	rootCmd.AddCommand(purgeCacheCmd)
 }
 
-func loadTransports() *apttransport.Registry {
+func loadTransports() *apttransport2.Registry {
 	// Configure caching (enabled by default)
-	cacheConfig := apttransport.CacheConfig{
+	cacheConfig := apttransport2.CacheConfig{
 		Disabled: false, // TODO: add --no-cache flag
 	}
 
-	r := apttransport.NewRegistryWithCache(cacheConfig)
-	r.Register(apttransport.NewHTTPTransport())
-	r.Register(apttransport.NewFileTransport())
+	r := apttransport2.NewRegistryWithCache(cacheConfig)
+	r.Register(apttransport2.NewHTTPTransport())
+	r.Register(apttransport2.NewFileTransport())
 	// TODO: on Debian systems, register transports for all available plugins
 	return r
-}
-
-// Implementation functions (stubs for demonstration)
-func runList(source, format string) error {
-	log.Info().Msgf("Listing packages from: %s", source)
-	log.Info().Msgf("Format: %s", format)
-
-	// TODO: Implement actual repository parsing and package listing
-	// This would involve:
-	// 1. Parsing the source (source line vs file)
-	// 2. Fetching Release and Packages files
-	// 3. Parsing package metadata
-	// 4. Formatting output according to --format flag
-
-	return nil
 }
 
 func runInfo(source, packageName, format string) error {
@@ -247,159 +227,16 @@ func parseSourceInput(source string) ([]sources.Entry, error) {
 			return nil, fmt.Errorf("failed to parse sources file: %w", err)
 		}
 
-		return sourcesList.GetEnabledEntries(), nil
+		return sourcesList, nil
 	}
 
 	// Parse as single source line
-	var entries []sources.Entry
-	for entry, err := range sources.ParseSources(strings.NewReader(source)) {
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse source line: %w", err)
-		}
-		entries = append(entries, *entry)
-	}
-
-	return entries, nil
-}
-
-func processPackagesFileFromRelease(registry *apttransport.Registry, source sources.Entry, fileInfo deb822.FileInfo, stats *RepositoryStats) error {
-	// Construct URL using the exact path from the Release file
-	packagesURL := strings.TrimSuffix(source.URI, "/") + "/dists/" + source.Distribution + "/" + fileInfo.Path
-
-	parsedURL, err := url.Parse(packagesURL)
+	entry, err := sources.ParseSourceLine(source, 1)
 	if err != nil {
-		return fmt.Errorf("failed to parse URL %s: %w", packagesURL, err)
+		return nil, fmt.Errorf("failed to parse source line: %w", err)
 	}
 
-	ctx := context.Background()
-	resp, err := registry.Acquire(ctx, &apttransport.AcquireRequest{
-		URI:     parsedURL,
-		Timeout: 30 * time.Second,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to fetch %s: %w", packagesURL, err)
-	}
-	defer resp.Content.Close()
-
-	// Handle gzipped files
-	var reader = resp.Content
-	if fileInfo.Compressed {
-		gzReader, err := gzip.NewReader(resp.Content)
-		if err != nil {
-			return fmt.Errorf("failed to decompress %s: %w", packagesURL, err)
-		}
-		defer gzReader.Close()
-		reader = gzReader
-	}
-
-	// Parse packages and update stats
-	packageCount := 0
-	for pkg, err := range deb822.ParsePackages(reader) {
-		if err != nil {
-			log.Warn().Err(err).Msg("Error parsing package")
-			continue
-		}
-
-		packageCount++
-		stats.Packages.Total++
-		stats.Packages.TotalSize += pkg.Size
-
-		// Count by architecture
-		if pkg.Architecture != "" {
-			stats.Packages.ByArchitecture[pkg.Architecture]++
-		}
-
-		// Count by component
-		stats.Packages.ByComponent[fileInfo.Component]++
-
-		// Count by section
-		if pkg.Section != "" {
-			stats.Packages.BySection[pkg.Section]++
-		}
-
-		// Count by priority
-		if pkg.Priority != "" {
-			stats.Packages.ByPriority[pkg.Priority]++
-		}
-	}
-
-	log.Debug().Msgf("Processed %d packages from %s", packageCount, packagesURL)
-	return nil
-}
-
-func processPackagesFile(registry *apttransport.Registry, source sources.Entry, component, arch string, stats *RepositoryStats) error {
-	// Try different possible Packages file locations
-	possiblePaths := []string{
-		fmt.Sprintf("/dists/%s/%s/binary-%s/Packages.gz", source.Distribution, component, arch),
-		fmt.Sprintf("/dists/%s/%s/binary-%s/Packages", source.Distribution, component, arch),
-	}
-
-	for _, path := range possiblePaths {
-		packagesURL := strings.TrimSuffix(source.URI, "/") + path
-
-		parsedURL, err := url.Parse(packagesURL)
-		if err != nil {
-			continue // Try next path
-		}
-
-		ctx := context.Background()
-		resp, err := registry.Acquire(ctx, &apttransport.AcquireRequest{
-			URI:     parsedURL,
-			Timeout: 30 * time.Second,
-		})
-		if err != nil {
-			continue // Try next path
-		}
-		defer resp.Content.Close()
-
-		// Handle gzipped files
-		var reader = resp.Content
-		if strings.HasSuffix(path, ".gz") {
-			gzReader, err := gzip.NewReader(resp.Content)
-			if err != nil {
-				resp.Content.Close()
-				continue
-			}
-			defer gzReader.Close()
-			reader = gzReader
-		}
-
-		// Parse packages and update stats
-		packageCount := 0
-		for pkg, err := range deb822.ParsePackages(reader) {
-			if err != nil {
-				log.Warn().Err(err).Msg("Error parsing package")
-				continue
-			}
-
-			packageCount++
-			stats.Packages.Total++
-			stats.Packages.TotalSize += pkg.Size
-
-			// Count by architecture
-			if pkg.Architecture != "" {
-				stats.Packages.ByArchitecture[pkg.Architecture]++
-			}
-
-			// Count by component
-			stats.Packages.ByComponent[component]++
-
-			// Count by section
-			if pkg.Section != "" {
-				stats.Packages.BySection[pkg.Section]++
-			}
-
-			// Count by priority
-			if pkg.Priority != "" {
-				stats.Packages.ByPriority[pkg.Priority]++
-			}
-		}
-
-		log.Debug().Msgf("Processed %d packages from %s", packageCount, packagesURL)
-		return nil // Successfully processed this path
-	}
-
-	return fmt.Errorf("could not fetch Packages file for %s/%s", component, arch)
+	return []sources.Entry{*entry}, nil
 }
 
 func runDownload(source, packageName, outputPath string) error {

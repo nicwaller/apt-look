@@ -44,6 +44,11 @@ apt-look search <source> <term> [options]  # Search packages
 
 ### Global Options
 
+**Architecture Selection:**
+```bash
+--arch=arm64                   # Default: detect current machine architecture
+```
+
 **Format Selection:**
 ```bash
 --format=text|json|tsv|raw     # Default: text

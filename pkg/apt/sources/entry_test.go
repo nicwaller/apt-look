@@ -4,49 +4,6 @@ import (
 	"testing"
 )
 
-func TestValidateURI(t *testing.T) {
-	tests := []struct {
-		name    string
-		uri     string
-		wantErr bool
-	}{
-		{
-			name:    "valid http URI",
-			uri:     "http://archive.ubuntu.com/ubuntu",
-			wantErr: false,
-		},
-		{
-			name:    "valid https URI",
-			uri:     "https://deb.debian.org/debian",
-			wantErr: false,
-		},
-		{
-			name:    "valid file URI",
-			uri:     "file:///cdrom",
-			wantErr: false,
-		},
-		{
-			name:    "root directory",
-			uri:     "/",
-			wantErr: false,
-		},
-		{
-			name:    "empty URI",
-			uri:     "",
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := validateURI(tt.uri)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("validateURI() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
 func TestIsSourceLine(t *testing.T) {
 	tests := []struct {
 		name string

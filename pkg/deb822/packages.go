@@ -58,7 +58,7 @@ type Package struct {
 	// Translation and localization
 	DescriptionMd5 string `json:"description_md5,omitempty"`
 
-	// Update control
+	// update control
 	PhasedUpdatePercentage int `json:"phased_update_percentage,omitempty"`
 
 	// License and origin information
@@ -169,13 +169,13 @@ func (p *Package) parseFields() error {
 	p.DescriptionMd5 = p.header.Get("Description-md5")
 
 	// Parse phased update percentage
-	if phasedField := p.header.Get("Phased-Update-Percentage"); phasedField != "" {
+	if phasedField := p.header.Get("Phased-update-Percentage"); phasedField != "" {
 		phased, err := strconv.Atoi(phasedField)
 		if err != nil {
-			return fmt.Errorf("invalid Phased-Update-Percentage field: %w", err)
+			return fmt.Errorf("invalid Phased-update-Percentage field: %w", err)
 		}
 		if phased < 0 || phased > 100 {
-			return fmt.Errorf("Phased-Update-Percentage must be 0-100, got %d", phased)
+			return fmt.Errorf("Phased-update-Percentage must be 0-100, got %d", phased)
 		}
 		p.PhasedUpdatePercentage = phased
 	}
