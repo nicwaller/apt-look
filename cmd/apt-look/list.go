@@ -2,13 +2,14 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"os"
-	"slices"
+	"strings"
 
 	"github.com/rs/zerolog/log"
 
 	"github.com/nicwaller/apt-look/pkg/apt"
+	"github.com/nicwaller/apt-look/pkg/deb822"
 )
 
 // Implementation functions (stubs for demonstration)
@@ -28,33 +29,118 @@ func runList(source, format string) error {
 		return fmt.Errorf("failed to parse source input: %w", err)
 	}
 
+	packageNames := make(map[string]bool) // for deduplication
+
 	for _, src := range sourceList {
 		repo, err := apt.Open(src)
 		if err != nil {
 			return fmt.Errorf("failed to open repository: %w", err)
 		}
-		count := 0
 		ctx := context.TODO()
 		_, err = repo.Update(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to update repository: %w", err)
 		}
-		packageNames := make([]string, 0)
+
+		count := 0
 		for pkg, err := range repo.Packages(ctx) {
 			if err != nil {
 				return fmt.Errorf("failed to list packages: %w", err)
 			}
-			if !slices.Contains(packageNames, pkg.Package) {
+			if !packageNames[pkg.Package] {
+				if err := outputPackage(pkg, format); err != nil {
+					return fmt.Errorf("failed to output package: %w", err)
+				}
+				packageNames[pkg.Package] = true
 				count++
-				packageNames = append(packageNames, pkg.Package)
 			}
-		}
-		slices.Sort(packageNames)
-		for _, pkgName := range packageNames {
-			_, _ = fmt.Fprintf(os.Stdout, "%s\n", pkgName)
 		}
 		log.Info().Msgf("%d packages found in %s", count, repo.DistributionRoot().String())
 	}
 
+	return nil
+}
+
+// outputPackage outputs a single package in the specified format
+func outputPackage(pkg *deb822.Package, format string) error {
+	switch format {
+	case "text":
+		fmt.Printf("%s\n", pkg.Package)
+	case "json":
+		data, err := json.Marshal(pkg)
+		if err != nil {
+			return fmt.Errorf("failed to marshal package to JSON: %w", err)
+		}
+		fmt.Printf("%s\n", string(data))
+	case "tsv":
+		// TSV format: Package\tVersion\tArchitecture\tSection\tDescription
+		fmt.Printf("%s\t%s\t%s\t%s\t%s\n",
+			pkg.Package,
+			pkg.Version,
+			pkg.Architecture,
+			pkg.Section,
+			strings.ReplaceAll(pkg.Description, "\n", " "))
+	case "raw":
+		// Output the raw RFC822 format
+		fmt.Printf("Package: %s\n", pkg.Package)
+		if pkg.Version != "" {
+			fmt.Printf("Version: %s\n", pkg.Version)
+		}
+		if pkg.Architecture != "" {
+			fmt.Printf("Architecture: %s\n", pkg.Architecture)
+		}
+		if pkg.Section != "" {
+			fmt.Printf("Section: %s\n", pkg.Section)
+		}
+		if pkg.Priority != "" {
+			fmt.Printf("Priority: %s\n", pkg.Priority)
+		}
+		if pkg.Maintainer != "" {
+			fmt.Printf("Maintainer: %s\n", pkg.Maintainer)
+		}
+		if pkg.Size > 0 {
+			fmt.Printf("Size: %d\n", pkg.Size)
+		}
+		if pkg.InstalledSize > 0 {
+			fmt.Printf("Installed-Size: %d\n", pkg.InstalledSize)
+		}
+		if pkg.Homepage != "" {
+			fmt.Printf("Homepage: %s\n", pkg.Homepage)
+		}
+		if pkg.Description != "" {
+			fmt.Printf("Description: %s\n", pkg.Description)
+		}
+		if pkg.Filename != "" {
+			fmt.Printf("Filename: %s\n", pkg.Filename)
+		}
+		if pkg.SHA256 != "" {
+			fmt.Printf("SHA256: %s\n", pkg.SHA256)
+		}
+		if pkg.MD5sum != "" {
+			fmt.Printf("MD5sum: %s\n", pkg.MD5sum)
+		}
+		if pkg.SHA1 != "" {
+			fmt.Printf("SHA1: %s\n", pkg.SHA1)
+		}
+		// Add dependency fields if they exist
+		if pkg.Depends != "" {
+			fmt.Printf("Depends: %s\n", pkg.Depends)
+		}
+		if pkg.Recommends != "" {
+			fmt.Printf("Recommends: %s\n", pkg.Recommends)
+		}
+		if pkg.Suggests != "" {
+			fmt.Printf("Suggests: %s\n", pkg.Suggests)
+		}
+		if pkg.Conflicts != "" {
+			fmt.Printf("Conflicts: %s\n", pkg.Conflicts)
+		}
+		if pkg.Provides != "" {
+			fmt.Printf("Provides: %s\n", pkg.Provides)
+		}
+		fmt.Printf("\n") // Blank line between packages
+	default:
+		return fmt.Errorf("unsupported format: %s", format)
+	}
 	return nil
 }
