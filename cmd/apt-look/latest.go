@@ -64,6 +64,27 @@ func runLatest(source, format string) error {
 		log.Info().Msgf("%d unique packages found in %s", count, repo.DistributionRoot().String())
 	}
 
+	// Check if no packages were found and warn about architecture mismatch
+	if len(latestPackages) == 0 {
+		for _, src := range sourceList {
+			repo, err := apt.Open(src)
+			if err != nil {
+				continue
+			}
+			ctx := context.TODO()
+			_, err = repo.Update(ctx)
+			if err != nil {
+				continue
+			}
+			
+			availableArchs := repo.GetAvailableArchitectures(src.Components)
+			if len(availableArchs) > 0 {
+				log.Warn().Msgf("No packages found for current architecture. Available architectures: %v", availableArchs)
+				break
+			}
+		}
+	}
+
 	// Convert to slice and sort by package name, then architecture
 	packages := make([]*deb822.Package, 0, len(latestPackages))
 	for _, pkg := range latestPackages {

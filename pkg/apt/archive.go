@@ -174,18 +174,16 @@ func (r *Repository) indexes() []deb822.FileInfo {
 		panic("release not initialized")
 	}
 
-	if r.components == nil {
+	if len(r.components) == 0 {
 		return r.release.GetAvailableFiles()
 	}
 
 	var files []deb822.FileInfo
 	for _, fi := range r.release.GetAvailableFiles() {
-		if r.components != nil {
-			if !slices.Contains(r.components, fi.Component) {
-				continue
-			}
+		if !slices.Contains(r.components, fi.Component) {
+			continue
 		}
-		if r.architectures != nil {
+		if r.architectures != nil && len(r.architectures) > 0 {
 			if !slices.Contains(r.architectures, fi.Architecture) {
 				continue
 			}
@@ -194,4 +192,31 @@ func (r *Repository) indexes() []deb822.FileInfo {
 	}
 
 	return files
+}
+
+// GetAvailableArchitectures returns all architectures available for the specified components
+func (r *Repository) GetAvailableArchitectures(components []string) []string {
+	if r.release == nil {
+		return nil
+	}
+
+	archSet := make(map[string]bool)
+	for _, fi := range r.release.GetAvailableFiles() {
+		if fi.Type == "Packages" {
+			// If components are specified, filter by them
+			if len(components) > 0 {
+				if !slices.Contains(components, fi.Component) {
+					continue
+				}
+			}
+			archSet[fi.Architecture] = true
+		}
+	}
+
+	var archs []string
+	for arch := range archSet {
+		archs = append(archs, arch)
+	}
+	slices.Sort(archs)
+	return archs
 }

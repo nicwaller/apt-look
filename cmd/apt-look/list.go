@@ -58,6 +58,27 @@ func runList(source, format string) error {
 		log.Info().Msgf("%d packages found in %s", count, repo.DistributionRoot().String())
 	}
 
+	// Check if no packages were found and warn about architecture mismatch
+	if len(packageNames) == 0 {
+		for _, src := range sourceList {
+			repo, err := apt.Open(src)
+			if err != nil {
+				continue
+			}
+			ctx := context.TODO()
+			_, err = repo.Update(ctx)
+			if err != nil {
+				continue
+			}
+			
+			availableArchs := repo.GetAvailableArchitectures(src.Components)
+			if len(availableArchs) > 0 {
+				log.Warn().Msgf("No packages found for current architecture. Available architectures: %v", availableArchs)
+				break
+			}
+		}
+	}
+
 	return nil
 }
 
