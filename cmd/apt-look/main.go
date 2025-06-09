@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
+	"github.com/nicwaller/apt-look/pkg/apt"
 	apttransport2 "github.com/nicwaller/apt-look/pkg/apt/apttransport"
 	"github.com/nicwaller/apt-look/pkg/apt/sources"
 )
@@ -244,6 +246,16 @@ func parseSourceInput(source string) ([]sources.Entry, error) {
 		}
 
 		return sourcesList, nil
+	}
+
+	// Check if it's a valid URL
+	if parsedURL, err := url.Parse(source); err == nil && parsedURL.Scheme != "" && parsedURL.Host != "" {
+		// Use apt.Discover to find available distributions and components
+		entries, err := apt.Discover(source)
+		if err != nil {
+			return nil, fmt.Errorf("failed to discover repository structure: %w", err)
+		}
+		return entries, nil
 	}
 
 	// Parse as single source line

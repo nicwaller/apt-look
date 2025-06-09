@@ -60,10 +60,15 @@ func runCheck(sourceStr, format string) error {
 		return fmt.Errorf("failed to parse sources: %w", err)
 	}
 
-	if len(sources) != 1 {
-		return fmt.Errorf("expected 1 source, got %d", len(sources))
+	if len(sources) == 0 {
+		return fmt.Errorf("no sources provided")
 	}
+	// Use the first source when multiple are discovered
 	source := sources[0]
+	if len(sources) > 1 {
+		log.Info().Msgf("Multiple sources discovered, using: %s %s %v", 
+			source.Type, source.ArchiveRoot.String(), source.Components)
+	}
 	//log.Info().Msgf("Checking repository integrity: %v", source)
 
 	// Perform the integrity check
